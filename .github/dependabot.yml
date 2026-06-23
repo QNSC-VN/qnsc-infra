@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    reviewers:
+      - nghiavan0610
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "ci(deps)"

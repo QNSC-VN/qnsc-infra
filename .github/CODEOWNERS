@@ -1,0 +1,5 @@
+# Platform infra — all changes require platform-lead review
+*                          @nghiavan0610
+modules/                   @nghiavan0610
+live/                      @nghiavan0610
+.github/workflows/         @nghiavan0610

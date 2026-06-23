@@ -1,0 +1,50 @@
+# =============================================================================
+# OpenTofu Apply — applies bootstrap on push to main.
+# NOTE: First-time bootstrap must be run manually (see live/bootstrap/main.tf).
+# This workflow handles subsequent changes to bootstrap resources.
+# =============================================================================
+name: OpenTofu Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "live/**"
+      - "modules/**"
+      - ".github/workflows/apply.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TOFU_VERSION: "1.9.1"
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  apply-bootstrap:
+    name: Apply bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: bootstrap   # requires manual approval — platform-level blast radius
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qncs-github-infra-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: tofu init
+        working-directory: live/bootstrap
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/bootstrap
+        run: tofu apply -input=false -auto-approve

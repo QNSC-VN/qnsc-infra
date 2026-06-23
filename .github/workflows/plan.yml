@@ -1,0 +1,75 @@
+# =============================================================================
+# OpenTofu Plan — dry-run on every PR to main.
+# Only runs for live/bootstrap/ (the only managed environment).
+# =============================================================================
+name: OpenTofu Plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "live/**"
+      - "modules/**"
+      - ".github/workflows/plan.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+env:
+  TOFU_VERSION: "1.9.1"
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  plan:
+    name: Plan bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: bootstrap
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qncs-github-infra-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: tofu init
+        working-directory: live/bootstrap
+        run: tofu init -input=false
+
+      - name: tofu validate
+        working-directory: live/bootstrap
+        run: tofu validate
+
+      - name: tofu plan
+        id: plan
+        working-directory: live/bootstrap
+        run: tofu plan -input=false -no-color 2>&1 | tee plan.txt
+        continue-on-error: true
+
+      - name: Post plan comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('live/bootstrap/plan.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.substring(0, 60000) + '\n\n... (truncated)'
+              : plan;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### OpenTofu Plan — \`live/bootstrap\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
