@@ -18,13 +18,13 @@ terraform {
   # After migration, all subsequent applies use the S3 backend.
   # ───────────────────────────────────────────────────────────────────────────
 
-  backend "s3" {
-    bucket         = "qnsc-tofu-state"
-    key            = "platform/bootstrap/terraform.tfstate"
-    region         = "ap-southeast-1"
-    encrypt        = true
-    dynamodb_table = "qnsc-tofu-locks"
-  }
+  # backend "s3" {
+  #   bucket         = "qnsc-tofu-state"
+  #   key            = "platform/bootstrap/terraform.tfstate"
+  #   region         = "ap-southeast-1"
+  #   encrypt        = true
+  #   dynamodb_table = "qnsc-tofu-locks"
+  # }
 }
 
 provider "aws" {
