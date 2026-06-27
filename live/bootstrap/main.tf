@@ -52,3 +52,23 @@ module "oidc_provider" {
   source = "../../modules/oidc-provider"
   tags   = { Layer = "platform" }
 }
+# ── Shared Customer-Managed KMS Key ────────────────────────────────────────────────────
+# One CMK per account, alias/qncs-platform.
+# Used by: RDS (storage encryption), Secrets Manager, S3 SSE-KMS.
+# Product infra reads the ARN from this stack's remote state.
+module "kms" {
+  source = "../../modules/kms"
+  tags   = { Layer = "platform" }
+}
+
+# ── Shared Artifacts S3 Bucket ────────────────────────────────────────────────────────
+# Central store for cross-repo build artifacts:
+#   openapi/{product}/{env}/{sha}/openapi.json  ← immutable
+#   openapi/{product}/{env}/latest/openapi.json ← mutable pointer
+# Used by: rally-api CI (publish-openapi-spec action), rally-web CI (codegen).
+module "artifacts_bucket" {
+  source      = "../../modules/artifacts-bucket"
+  bucket_name = "qncs-artifacts"
+  kms_key_arn = module.kms.key_arn
+  tags        = { Layer = "platform" }
+}
