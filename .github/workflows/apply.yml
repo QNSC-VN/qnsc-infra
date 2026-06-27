@@ -30,13 +30,13 @@ jobs:
     environment: bootstrap   # requires manual approval — platform-level blast radius
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - uses: opentofu/setup-opentofu@v1
+      - uses: opentofu/setup-opentofu@909f0081d9d7379c18f3cb2c598fca1c21d5b7c0  # v1.4.0
         with:
           tofu_version: ${{ env.TOFU_VERSION }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d0407291516679297d9126  # v4.1.0
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qncs-github-infra-apply
           aws-region: ${{ env.AWS_REGION }}
