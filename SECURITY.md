@@ -4,7 +4,7 @@
 
 **Do not open a public GitHub issue.**
 
-Email: **security@qncs.io**
+Email: **security@qnsc.vn**
 
 Acknowledgement within **48 hours**, status update within **7 days**.
 

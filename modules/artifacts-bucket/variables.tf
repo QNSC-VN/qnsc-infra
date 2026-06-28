@@ -1,6 +1,6 @@
 variable "bucket_name" {
   type        = string
-  description = "S3 bucket name for shared build artifacts (e.g. qncs-artifacts)"
+  description = "S3 bucket name for shared build artifacts (e.g. qnsc-artifacts)"
 }
 
 variable "kms_key_arn" {

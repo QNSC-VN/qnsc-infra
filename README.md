@@ -1,14 +1,14 @@
-# qncs-infra
+# qnsc-infra
 
-> Platform-level AWS infrastructure shared across all QNCS products.
+> Platform-level AWS infrastructure shared across all QNSC products.
 
 ## What this repo manages
 
 | Resource | Why it's here |
 |---|---|
 | GitHub OIDC provider | AWS allows only **one** per account — all products share it |
-| S3 state bucket (`qncs-tofu-state`) | Single source of truth for all Tofu state |
-| DynamoDB lock table (`qncs-tofu-locks`) | Prevents concurrent applies across all product repos |
+| S3 state bucket (`qnsc-tofu-state`) | Single source of truth for all Tofu state |
+| DynamoDB lock table (`qnsc-tofu-locks`) | Prevents concurrent applies across all product repos |
 
 ## What belongs in **product** infra repos
 
@@ -38,7 +38,7 @@ After bootstrap, product infra repos can reference the OIDC ARN:
 data "terraform_remote_state" "platform" {
   backend = "s3"
   config = {
-    bucket = "qncs-tofu-state"
+    bucket = "qnsc-tofu-state"
     key    = "platform/bootstrap/terraform.tfstate"
     region = "ap-southeast-1"
   }
@@ -51,7 +51,7 @@ oidc_provider_arn = data.terraform_remote_state.platform.outputs.oidc_provider_a
 ## State key namespacing
 
 ```
-qncs-tofu-state/
+qnsc-tofu-state/
   platform/bootstrap/terraform.tfstate     ← this repo
   rally/shared/terraform.tfstate           ← rally-infra _shared
   rally/develop/terraform.tfstate          ← rally-infra develop

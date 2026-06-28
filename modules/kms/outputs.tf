@@ -10,5 +10,5 @@ output "key_id" {
 
 output "key_alias" {
   value       = aws_kms_alias.this.name
-  description = "KMS key alias (alias/qncs-platform)"
+  description = "KMS key alias (alias/qnsc-platform)"
 }

@@ -38,7 +38,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d0407291516679297d9126  # v4.1.0
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qncs-github-infra-apply
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region: ${{ env.AWS_REGION }}
 
       - name: tofu init

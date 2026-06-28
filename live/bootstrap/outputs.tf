@@ -1,11 +1,11 @@
 output "state_bucket_name" {
   value       = module.state_backend.bucket_name
-  description = "Use in all product infra backends: bucket = \"qncs-tofu-state\""
+  description = "Use in all product infra backends: bucket = \"qnsc-tofu-state\""
 }
 
 output "dynamodb_table_name" {
   value       = module.state_backend.table_name
-  description = "Use in all product infra backends: dynamodb_table = \"qncs-tofu-locks\""
+  description = "Use in all product infra backends: dynamodb_table = \"qnsc-tofu-locks\""
 }
 
 output "oidc_provider_arn" {
@@ -20,7 +20,7 @@ output "kms_key_arn" {
 
 output "kms_key_alias" {
   value       = module.kms.key_alias
-  description = "KMS key alias (alias/qncs-platform)"
+  description = "KMS key alias (alias/qnsc-platform)"
 }
 
 output "artifacts_bucket_name" {

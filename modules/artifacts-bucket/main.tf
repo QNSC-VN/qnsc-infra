@@ -6,7 +6,7 @@
 # Products write their own prefix; IAM policies in each product's infra
 # scope read/write to their namespace only.
 #
-# The publish-openapi-spec composite action (qncs-gitops) uses this bucket
+# The publish-openapi-spec composite action (qnsc-gitops) uses this bucket
 # as the S3 target when s3-upload: 'true' is set.
 terraform {
   required_providers {

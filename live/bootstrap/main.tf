@@ -19,11 +19,11 @@ terraform {
   # ───────────────────────────────────────────────────────────────────────────
 
   # backend "s3" {
-  #   bucket         = "qncs-tofu-state"
+  #   bucket         = "qnsc-tofu-state"
   #   key            = "platform/bootstrap/terraform.tfstate"
   #   region         = "ap-southeast-1"
   #   encrypt        = true
-  #   dynamodb_table = "qncs-tofu-locks"
+  #   dynamodb_table = "qnsc-tofu-locks"
   # }
 }
 
@@ -31,7 +31,7 @@ provider "aws" {
   region = "ap-southeast-1"
   default_tags {
     tags = {
-      Org       = "qncs"
+      Org       = "qnsc"
       ManagedBy = "opentofu"
       Layer     = "platform"
     }
@@ -41,8 +41,8 @@ provider "aws" {
 # ── Shared State Backend ──────────────────────────────────────────────────────
 module "state_backend" {
   source         = "../../modules/state-backend"
-  bucket_name    = "qncs-tofu-state"
-  dynamodb_table = "qncs-tofu-locks"
+  bucket_name    = "qnsc-tofu-state"
+  dynamodb_table = "qnsc-tofu-locks"
   tags           = { Layer = "platform" }
 }
 
@@ -53,7 +53,7 @@ module "oidc_provider" {
   tags   = { Layer = "platform" }
 }
 # ── Shared Customer-Managed KMS Key ────────────────────────────────────────────────────
-# One CMK per account, alias/qncs-platform.
+# One CMK per account, alias/qnsc-platform.
 # Used by: RDS (storage encryption), Secrets Manager, S3 SSE-KMS.
 # Product infra reads the ARN from this stack's remote state.
 module "kms" {
@@ -68,7 +68,7 @@ module "kms" {
 # Used by: rally-api CI (publish-openapi-spec action), rally-web CI (codegen).
 module "artifacts_bucket" {
   source      = "../../modules/artifacts-bucket"
-  bucket_name = "qncs-artifacts"
+  bucket_name = "qnsc-artifacts"
   kms_key_arn = module.kms.key_arn
   tags        = { Layer = "platform" }
 }

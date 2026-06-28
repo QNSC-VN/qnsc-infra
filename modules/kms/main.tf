@@ -92,10 +92,10 @@ resource "aws_kms_key" "this" {
     ]
   })
 
-  tags = merge(var.tags, { Name = "qncs-platform-cmk" })
+  tags = merge(var.tags, { Name = "qnsc-platform-cmk" })
 }
 
 resource "aws_kms_alias" "this" {
-  name          = "alias/qncs-platform"
+  name          = "alias/qnsc-platform"
   target_key_id = aws_kms_key.this.key_id
 }
