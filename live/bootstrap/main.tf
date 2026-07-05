@@ -4,27 +4,13 @@ terraform {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
 
-  # ── Bootstrap note ─────────────────────────────────────────────────────────
-  # First-time setup is a two-step process (chicken-and-egg):
-  #
-  # Step 1: Run with local backend (default, no backend block):
-  #   tofu init && tofu apply
-  #   This creates the S3 bucket + DynamoDB table + GitHub OIDC provider.
-  #
-  # Step 2: Migrate state to the newly-created S3 bucket:
-  #   Uncomment the s3 backend block below, then:
-  #   tofu init -migrate-state
-  #
-  # After migration, all subsequent applies use the S3 backend.
-  # ───────────────────────────────────────────────────────────────────────────
-
-  # backend "s3" {
-  #   bucket         = "qnsc-tofu-state"
-  #   key            = "platform/bootstrap/terraform.tfstate"
-  #   region         = "ap-southeast-1"
-  #   encrypt        = true
-  #   dynamodb_table = "qnsc-tofu-locks"
-  # }
+  backend "s3" {
+    bucket         = "qnsc-tofu-state"
+    key            = "platform/bootstrap/terraform.tfstate"
+    region         = "ap-southeast-1"
+    encrypt        = true
+    dynamodb_table = "qnsc-tofu-locks"
+  }
 }
 
 provider "aws" {
@@ -71,4 +57,25 @@ module "artifacts_bucket" {
   bucket_name = "qnsc-artifacts"
   kms_key_arn = module.kms.key_arn
   tags        = { Layer = "platform" }
+}
+
+# ── GitHub OIDC — this repo's own infra-plan/infra-apply roles ──────────────
+# plan.yml/apply.yml assume qnsc-github-infra-plan / qnsc-github-infra-apply.
+# environments left empty — no per-environment app deploy role needed here
+# (this repo only ever runs plan/apply, never deploys an app). app_repo_names
+# can't be empty: the ecr-push role's trust policy needs at least one real
+# repo in its condition or the policy is invalid; qnsc-infra never actually
+# pushes images, so this role stays unused but harmless.
+module "iam_oidc" {
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/iam-oidc?ref=iam-oidc-v1.1.0"
+
+  product           = "qnsc"
+  oidc_provider_arn = module.oidc_provider.arn
+
+  environments           = {}
+  app_repo_names         = ["qnsc-infra"]
+  infra_repo_name        = "qnsc-infra"
+  ecr_repository_pattern = "qnsc-*"
+  ecs_passrole_pattern   = "qnsc-*"
+  tags                   = { Layer = "platform" }
 }
