@@ -36,6 +36,24 @@ resource "aws_s3_bucket_public_access_block" "state" {
   restrict_public_buckets = true
 }
 
+# Deny any non-TLS access to the state bucket. (SSE stays SSE-S3 for now: moving
+# to SSE-KMS requires granting kms:Decrypt to the plan/apply/deploy roles, and is
+# better delivered by per-account keys in the future multi-account split.)
+resource "aws_s3_bucket_policy" "state" {
+  bucket = aws_s3_bucket.state.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureTransport"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
+      Condition = { Bool = { "aws:SecureTransport" = "false" } }
+    }]
+  })
+}
+
 resource "aws_dynamodb_table" "locks" {
   name         = var.dynamodb_table
   billing_mode = "PAY_PER_REQUEST"

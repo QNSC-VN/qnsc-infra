@@ -3,7 +3,7 @@
 # NOTE: First-time bootstrap must be run manually (see live/bootstrap/main.tf
 # history — the state-backend/OIDC-provider chicken-and-egg). This workflow
 # handles subsequent changes, and first-time apply of any later stack
-# (platform-dev onward) since those don't have the same bootstrap problem.
+# (security-baseline onward) since those don't have the same bootstrap problem.
 # =============================================================================
 name: OpenTofu Apply
 
@@ -53,12 +53,12 @@ jobs:
         env:
           TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
 
-  apply-platform-dev:
-    name: Apply platform-dev
+  apply-security-baseline:
+    name: Apply security-baseline
     needs: apply-bootstrap
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: platform-dev   # separate approval gate from bootstrap
+    environment: security-baseline   # own approval gate — account-wide audit controls
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
@@ -73,9 +73,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: tofu init
-        working-directory: live/platform-dev
+        working-directory: live/security-baseline
         run: tofu init -input=false
 
       - name: tofu apply
-        working-directory: live/platform-dev
+        working-directory: live/security-baseline
         run: tofu apply -input=false -auto-approve

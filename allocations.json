@@ -1,0 +1,23 @@
+{
+  "_comment": "Single source of truth for per-(product,env) VPC /16 allocations. The second octet (10.<net>.0.0/16) must be UNIQUE across every stack so future VPC peering / Transit Gateway / shared-services connectivity never collides. init.sh reads this to reserve the next free octet when scaffolding a new product; CI can assert no stack uses an octet absent from here. Renumbering a live VPC is destructive, so existing entries are frozen.",
+  "cidr_prefix": "10",
+  "reserved_bands": {
+    "platform": "90-99  (shared platform stacks, e.g. platform-dev=90)",
+    "products": "10-89  (each product-env takes one octet)"
+  },
+  "allocations": {
+    "platform-dev":    { "net": 90, "cidr": "10.90.0.0/16", "status": "live" },
+    "rally-develop":   { "net": 10, "cidr": "10.10.0.0/16", "status": "live" },
+    "rally-prod":      { "net": 20, "cidr": "10.20.0.0/16", "status": "live" },
+    "opshub-develop":  { "net": 50, "cidr": "10.50.0.0/16", "status": "live" },
+    "opshub-prod":     { "net": 30, "cidr": "10.30.0.0/16", "status": "live" }
+  },
+  "next_free_hint": "First unused octet in 10-89 (currently 11). init.sh should pick the lowest free value and append two entries (<product>-develop, <product>-prod) before scaffolding.",
+  "naming_conventions": {
+    "state_key": "qnsc-tofu-state/<product>/<env>/terraform.tfstate",
+    "resource_name": "<product>-<env> (e.g. rally-develop)",
+    "service_name": "<product>-<svc> (e.g. rally-api)",
+    "oidc_roles": "<product>-github-{deploy-<env>,ecr-push,infra-plan,infra-apply,web-deploy-<env>}",
+    "region": "ap-southeast-1"
+  }
+}
