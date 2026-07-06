@@ -32,3 +32,8 @@ output "artifacts_bucket_arn" {
   value       = module.artifacts_bucket.bucket_arn
   description = "Shared artifacts bucket ARN — grant product IAM roles write access to their prefix"
 }
+
+output "cloudflare_zone_id" {
+  value       = var.cloudflare_zone_id
+  description = "Cloudflare Zone ID for qnsc.vn — products read this to manage their own DNS records via the shared dns-record module"
+}
