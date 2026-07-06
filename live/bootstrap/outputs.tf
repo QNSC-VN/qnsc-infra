@@ -37,3 +37,8 @@ output "cloudflare_zone_id" {
   value       = var.cloudflare_zone_id
   description = "Cloudflare Zone ID for qnsc.vn — products read this to manage their own DNS records via the shared dns-record module"
 }
+
+output "cloudflare_ipv4" {
+  value       = local.cloudflare_ipv4
+  description = "Cloudflare IPv4 ranges — products read this for prod ALB ingress allow-lists (single source of truth)"
+}
