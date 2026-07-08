@@ -2,15 +2,16 @@
   "_comment": "Single source of truth for per-(product,env) VPC /16 allocations. The second octet (10.<net>.0.0/16) must be UNIQUE across every stack so future VPC peering / Transit Gateway / shared-services connectivity never collides. init.sh reads this to reserve the next free octet when scaffolding a new product; CI can assert no stack uses an octet absent from here. Renumbering a live VPC is destructive, so existing entries are frozen.",
   "cidr_prefix": "10",
   "reserved_bands": {
-    "platform": "90-99  (shared platform stacks, e.g. platform-dev=90)",
-    "products": "10-89  (each product-env takes one octet)"
+    "platform": "90-99  (shared platform/runtime stacks: runtime-dev=90, runtime-prod=91)",
+    "products": "10-89  (each product-env takes one octet; product RDS/ECS only — VPC/ALB now shared via runtime)"
   },
   "allocations": {
-    "platform-dev":    { "net": 90, "cidr": "10.90.0.0/16", "status": "live" },
-    "rally-develop":   { "net": 10, "cidr": "10.10.0.0/16", "status": "live" },
-    "rally-prod":      { "net": 20, "cidr": "10.20.0.0/16", "status": "live" },
-    "opshub-develop":  { "net": 50, "cidr": "10.50.0.0/16", "status": "live" },
-    "opshub-prod":     { "net": 30, "cidr": "10.30.0.0/16", "status": "live" }
+    "runtime-dev":     { "net": 90, "cidr": "10.90.0.0/16", "status": "live",    "note": "shared dev VPC+ALB (replaces removed platform-dev)" },
+    "runtime-prod":    { "net": 91, "cidr": "10.91.0.0/16", "status": "staged",  "note": "shared prod VPC+ALB+cache; applied at launch" },
+    "rally-develop":   { "net": 10, "cidr": "10.10.0.0/16", "status": "retiring", "note": "per-product dev VPC — destroyed after cutover to runtime-dev" },
+    "rally-prod":      { "net": 20, "cidr": "10.20.0.0/16", "status": "retiring", "note": "per-product prod VPC — superseded by runtime-prod" },
+    "opshub-develop":  { "net": 50, "cidr": "10.50.0.0/16", "status": "retiring", "note": "per-product dev VPC — destroyed after cutover to runtime-dev" },
+    "opshub-prod":     { "net": 30, "cidr": "10.30.0.0/16", "status": "retiring", "note": "per-product prod VPC — superseded by runtime-prod" }
   },
   "next_free_hint": "First unused octet in 10-89 (currently 11). init.sh should pick the lowest free value and append two entries (<product>-develop, <product>-prod) before scaffolding.",
   "naming_conventions": {
