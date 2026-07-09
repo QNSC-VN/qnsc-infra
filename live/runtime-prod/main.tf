@@ -111,7 +111,12 @@ module "alb" {
 }
 
 # ── WAF (regional, on the shared ALB) ─────────────────────────────────────────
+# Version A (lean): Cloudflare edge owns the WAF (see live/edge + cf-edge), so
+# this AWS WAFv2 is OFF by default (enable_aws_waf=false) to avoid double-WAF /
+# double-pay. Flip on for the HA/compliance tier if you want origin-side defense
+# in depth in addition to the edge. See COST_POSTURE_PLAN §10.
 module "waf" {
+  count  = var.enable_aws_waf ? 1 : 0
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/waf?ref=waf-v1.0.1"
 
   name                = local.name

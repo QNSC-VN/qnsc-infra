@@ -18,3 +18,9 @@ variable "rate_limit_per_5min" {
   default     = 3000
   description = "WAF per-IP request rate limit per 5-minute window on the shared ALB."
 }
+
+variable "enable_aws_waf" {
+  type        = bool
+  default     = false
+  description = "Attach the AWS WAFv2 WebACL to the shared ALB. OFF for Version A (lean): Cloudflare edge owns the WAF (rate-limit + custom rules free-tier; managed OWASP at Pro+ via the edge stack's enable_managed_waf) — see COST_POSTURE_PLAN §10, never run both. Turn ON only for HA/compliance defense-in-depth."
+}
