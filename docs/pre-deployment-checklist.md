@@ -81,13 +81,11 @@ For each product, then **verify before prod**:
         `enable_interface_endpoints=false` in dev (no interface VPC endpoints).
   - [ ] **rds** — uses the **RDS-managed master password** (a Secrets Manager
         secret is created automatically); `engine_version` is correct
-        (rally 17, opshub **18**); `AutoStop=true` tag present.
+        (rally 17, opshub **18**).
   - [ ] **ecs-service** — task/exec role names; `region` is passed; circuit
-        breaker + CPU & memory autoscaling present; `AutoStop=true` on api/worker.
+        breaker + CPU & memory autoscaling present.
   - [ ] **cache** — `mode = "node"` in dev (single small node, not serverless).
   - [ ] **waf** — `enabled=false` in rally dev; opshub dev has it on.
-  - [ ] **dev-scheduler** — present; tags it targets (`AutoStop=true`) exist on
-        rds + api + worker.
 - [ ] `tofu apply`
 - [ ] **Fill secret values** (the modules create empty secrets):
       `aws secretsmanager put-secret-value ...` for each `<product>/<env>/*`.
@@ -105,7 +103,6 @@ Only after develop is healthy.
   - [ ] `multi_az_nat = true`, RDS `multi_az = true`, `deletion_protection = true`.
   - [ ] `enable_interface_endpoints = true` (default) — interface endpoints on.
   - [ ] cache `mode = "serverless"`.
-  - [ ] **No `AutoStop` tag** anywhere in prod (the scheduler must never touch prod).
   - [ ] **ALB access logs** enabled (alb-logs bucket created).
   - [ ] WAF `enabled` (default), associated to the ALB.
   - [ ] RDS Performance Insights + enhanced monitoring (if `monitoring_interval>0`).
