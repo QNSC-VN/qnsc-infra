@@ -1,9 +1,11 @@
 # =============================================================================
-# OpenTofu Plan — dry-run on every PR to main.
+# Infrastructure · Plan — dry-run on every PR to main.
+# (OpenTofu under the hood — named by capability, not tool.)
 # Runs for every managed environment in live/ (see the matrix below — add a
-# new entry here when a new live/<name> stack is added).
+# new entry here when a new live/<name> stack is added). A `tofu fmt` job gates
+# formatting drift.
 # =============================================================================
-name: OpenTofu Plan
+name: Infrastructure · Plan
 
 on:
   pull_request:
@@ -11,7 +13,7 @@ on:
     paths:
       - "live/**"
       - "modules/**"
-      - ".github/workflows/plan.yml"
+      - ".github/workflows/infra-plan.yml"
 
 permissions:
   contents: read
@@ -23,6 +25,22 @@ env:
   AWS_REGION: ap-southeast-1
 
 jobs:
+  fmt:
+    name: tofu fmt check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu fmt -check
+        run: tofu fmt -check -recursive -diff
+
   plan:
     name: Plan ${{ matrix.workspace }}
     runs-on: ubuntu-latest
@@ -37,14 +55,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          tofu_version: ${{ env.TOFU_VERSION }}
-
-      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d0407291516679297d9126  # v4.1.0
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
-          aws-region: ${{ env.AWS_REGION }}
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
 
       - name: tofu init
         working-directory: live/${{ matrix.workspace }}
@@ -73,7 +88,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### OpenTofu Plan — \`live/${{ matrix.workspace }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
+              body: `### Infrastructure Plan — \`live/${{ matrix.workspace }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
             });
 
       - name: Fail if plan failed

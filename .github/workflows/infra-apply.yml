@@ -1,11 +1,13 @@
 # =============================================================================
-# OpenTofu Apply — applies each live/ stack on push to main.
+# Infrastructure · Apply — applies each live/ stack on push to main.
+# (OpenTofu under the hood — named by capability, not tool.)
+#
 # NOTE: First-time bootstrap must be run manually (see live/bootstrap/main.tf
 # history — the state-backend/OIDC-provider chicken-and-egg). This workflow
 # handles subsequent changes, and first-time apply of any later stack
 # (security-baseline onward) since those don't have the same bootstrap problem.
 # =============================================================================
-name: OpenTofu Apply
+name: Infrastructure · Apply
 
 on:
   push:
@@ -13,8 +15,14 @@ on:
     paths:
       - "live/**"
       - "modules/**"
-      - ".github/workflows/apply.yml"
+      - ".github/workflows/infra-apply.yml"
   workflow_dispatch:
+
+# Serialize applies on the same ref so two quick merges can't race the tofu
+# state lock. Never cancel a running apply mid-flight.
+concurrency:
+  group: infra-apply-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -34,14 +42,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          tofu_version: ${{ env.TOFU_VERSION }}
-
-      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d0407291516679297d9126  # v4.1.0
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
-          aws-region: ${{ env.AWS_REGION }}
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
 
       - name: tofu init
         working-directory: live/bootstrap
@@ -63,14 +68,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          tofu_version: ${{ env.TOFU_VERSION }}
-
-      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d0407291516679297d9126  # v4.1.0
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
-          aws-region: ${{ env.AWS_REGION }}
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
 
       - name: tofu init
         working-directory: live/security-baseline
