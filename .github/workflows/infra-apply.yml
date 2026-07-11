@@ -1,0 +1,219 @@
+# =============================================================================
+# Infrastructure · Apply — applies changed live/ stacks on push to main.
+# (OpenTofu under the hood — named by capability, not tool.)
+#
+# A `detect` job diffs the push and applies ONLY the stacks that changed (a
+# modules/ or workflow change applies everything); manual dispatch applies all.
+# Each stack runs under a GitHub Environment that doubles as the OIDC trust
+# boundary AND the reviewer gate, mapped to the three tiers the infra-apply
+# role trusts (see qnsc-tf-modules/modules/iam-oidc infra_apply_subjects):
+#   • shared     → bootstrap, security-baseline, edge (account/platform-wide)
+#   • develop    → runtime-dev
+#   • production → runtime-prod (protect with required reviewers)
+#
+# NOTE: First-time bootstrap must be run manually (see live/bootstrap/main.tf
+# history — the state-backend/OIDC-provider chicken-and-egg). This workflow
+# handles subsequent changes and first-time apply of every later stack.
+# =============================================================================
+name: Infrastructure · Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "live/**"
+      - "modules/**"
+      - ".github/workflows/infra-apply.yml"
+  workflow_dispatch:
+
+# Serialize applies on the same ref so two quick merges can't race the tofu
+# state lock. Never cancel a running apply mid-flight.
+concurrency:
+  group: infra-apply-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TOFU_VERSION: "1.9.1"
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────
+  # Which live/ stacks changed in this push? (modules/ or workflow change, or a
+  # manual dispatch → apply all.) Downstream jobs gate on this list.
+  # ───────────────────────────────────────────────────────────────────────
+  detect:
+    name: Detect changed stacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stacks: ${{ steps.changes.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed stacks
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge"'
+          # Manual dispatch or an unknown/zero base commit → apply everything.
+          if [ -z "${BEFORE:-}" ] || [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CHANGED="$(git diff --name-only "$BEFORE" "$AFTER")"
+          echo "Changed files:"; echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(modules/|\.github/workflows/infra-apply\.yml$)'; then
+            echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          SEL=""
+          for s in bootstrap security-baseline runtime-dev runtime-prod edge; do
+            if echo "$CHANGED" | grep -qE "^live/$s/"; then SEL="$SEL\"$s\","; fi
+          done
+          echo "stacks=[${SEL%,}]" >> "$GITHUB_OUTPUT"
+
+  # ───────────────────────────────────────────────────────────────────────
+  # shared tier — bootstrap first (everything reads its remote state).
+  # ───────────────────────────────────────────────────────────────────────
+  apply-bootstrap:
+    name: Apply bootstrap
+    needs: detect
+    if: ${{ contains(fromJson(needs.detect.outputs.stacks), 'bootstrap') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: shared   # platform blast radius — gate with required reviewers
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/bootstrap
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/bootstrap
+        run: tofu apply -input=false -auto-approve
+        env:
+          TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+
+  apply-security-baseline:
+    name: Apply security-baseline
+    needs: [detect, apply-bootstrap]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'security-baseline') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: shared   # account-wide audit controls
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/security-baseline
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/security-baseline
+        run: tofu apply -input=false -auto-approve
+
+  apply-edge:
+    name: Apply edge
+    needs: [detect, apply-bootstrap]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'edge') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: shared   # Cloudflare edge — account/zone-wide
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/edge
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/edge
+        run: tofu apply -input=false -auto-approve
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  # ───────────────────────────────────────────────────────────────────────
+  # develop / production tiers — shared runtime networking per env.
+  # ───────────────────────────────────────────────────────────────────────
+  apply-runtime-dev:
+    name: Apply runtime-dev
+    needs: [detect, apply-bootstrap]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-dev') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: develop
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/runtime-dev
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/runtime-dev
+        run: tofu apply -input=false -auto-approve
+        env:
+          TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_DEVELOP }}
+
+  apply-runtime-prod:
+    name: Apply runtime-prod
+    needs: [detect, apply-bootstrap]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production   # PROTECT with required reviewers
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/runtime-prod
+        run: tofu init -input=false
+
+      - name: tofu apply
+        working-directory: live/runtime-prod
+        run: tofu apply -input=false -auto-approve
+        env:
+          TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_PROD }}

@@ -1,0 +1,143 @@
+# =============================================================================
+# Infrastructure · Plan — dry-run on every PR to main.
+# (OpenTofu under the hood — named by capability, not tool.)
+# A `detect` job diffs the PR and plans only the live/ stacks it touches (a
+# change under modules/ or to this workflow plans every stack). A `tofu fmt`
+# job gates formatting drift across the whole tree.
+# =============================================================================
+name: Infrastructure · Plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "live/**"
+      - "modules/**"
+      - ".github/workflows/infra-plan.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+env:
+  TOFU_VERSION: "1.9.1"
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────
+  # Detect which live/ stacks this PR touches → we plan only those. A change
+  # under modules/ (shared) or to this workflow plans every stack. Keeps
+  # unrelated PRs fast and avoids planning stacks whose inputs aren't wired.
+  # ───────────────────────────────────────────────────────────────────────
+  detect:
+    name: Detect changed stacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stacks: ${{ steps.changes.outputs.stacks }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Compute stack matrix
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          echo "Changed files:"; echo "$CHANGED"
+          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge"'
+          # A shared/module or workflow change affects every stack.
+          if echo "$CHANGED" | grep -qE '^(modules/|\.github/workflows/infra-plan\.yml$)'; then
+            echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          SEL=""
+          for s in bootstrap security-baseline runtime-dev runtime-prod edge; do
+            if echo "$CHANGED" | grep -qE "^live/$s/"; then SEL="$SEL\"$s\","; fi
+          done
+          echo "stacks=[${SEL%,}]" >> "$GITHUB_OUTPUT"
+
+  fmt:
+    name: tofu fmt check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu fmt -check
+        run: tofu fmt -check -recursive -diff
+
+  plan:
+    name: Plan ${{ matrix.stack }}
+    needs: detect
+    if: needs.detect.outputs.stacks != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # NOTE: intentionally NO `environment:` here. The infra-plan role's OIDC
+    # trust is scoped to pull_request / main subjects; adding an environment
+    # would flip the token subject to `environment:<name>` and break AssumeRole
+    # once the current wildcard trust is tightened to the module defaults.
+    # Plan is read-only, so no reviewer gate is needed anyway.
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJson(needs.detect.outputs.stacks) }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
+        with:
+          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/${{ matrix.stack }}
+        run: tofu init -input=false
+
+      - name: tofu validate
+        working-directory: live/${{ matrix.stack }}
+        run: tofu validate
+
+      - name: tofu plan
+        id: plan
+        working-directory: live/${{ matrix.stack }}
+        run: tofu plan -input=false -no-color 2>&1 | tee plan.txt
+        continue-on-error: true
+        env:
+          # Stack-specific inputs. Vars a stack doesn't declare are ignored
+          # (tofu just warns), so passing the full set to every stack is safe.
+          TF_VAR_cloudflare_zone_id:   ${{ vars.CLOUDFLARE_ZONE_ID }}
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_acm_cert_arn: ${{ matrix.stack == 'runtime-prod' && vars.ACM_CERT_ARN_PROD || vars.ACM_CERT_ARN_DEVELOP }}
+
+      - name: Post plan comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('live/${{ matrix.stack }}/plan.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.substring(0, 60000) + '\n\n... (truncated)'
+              : plan;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Infrastructure Plan — \`live/${{ matrix.stack }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1

@@ -1,0 +1,72 @@
+# =============================================================================
+# Security · Scan — IaC misconfig + committed-secret gate for the live stacks.
+#
+# The shared QNSC-VN/qnsc-ci security suite is app/container oriented (Semgrep
+# TS/Node packs, Trivy image CVEs) and is the wrong tool for pure OpenTofu, so
+# this repo runs the IaC-native pair instead:
+#   • Checkov  — Terraform/OpenTofu misconfig scan over live/ (the composition
+#                layer defines its own raw resources — CloudTrail, Config, cost
+#                controls — that the shared tf-modules checkov gate never sees).
+#   • Gitleaks — committed-secret scan (guards against a credential slipping
+#                into a *.tfvars or backend config).
+#
+# Checkov is REPORT-ONLY for now (no baseline yet). Triage the first-run
+# findings, add a modules-style .checkov.baseline, then flip soft_fail: false.
+# =============================================================================
+name: Security · Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1" # weekly Monday 04:00 UTC — catch new CVEs between pushes
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checkov:
+    name: checkov (IaC misconfig)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@d9d1e5cdc53e3a91f0c4c58db7bc19ee31cac7e5 # v12.3113.0
+        with:
+          directory: live/
+          framework: terraform
+          quiet: true
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+          # REPORT-ONLY until a baseline is committed — see header. Flip to false
+          # (with baseline: live/.checkov.baseline) to enforce on NEW findings.
+          soft_fail: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
+        with:
+          sarif_file: checkov.sarif
+        continue-on-error: true
+
+  secret-scan:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - uses: QNSC-VN/qnsc-ci/actions/scan-secrets@v1
