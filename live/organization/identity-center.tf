@@ -27,9 +27,9 @@ locals {
   #   billing   → finance
   permission_sets = {
     admin    = { description = "Full administrator (platform owner / break-glass).", managed_policy = "arn:aws:iam::aws:policy/AdministratorAccess", session = "PT4H" }
-    power    = { description = "Engineer — everything except IAM/Org management.", managed_policy = "arn:aws:iam::aws:policy/PowerUserAccess", session = "PT8H" }
+    power    = { description = "Engineer - everything except IAM/Org management.", managed_policy = "arn:aws:iam::aws:policy/PowerUserAccess", session = "PT8H" }
     readonly = { description = "Read-only auditor / dashboard access.", managed_policy = "arn:aws:iam::aws:policy/ReadOnlyAccess", session = "PT8H" }
-    billing  = { description = "Finance — billing & cost management.", managed_policy = "arn:aws:iam::aws:policy/job-function/Billing", session = "PT4H" }
+    billing  = { description = "Finance - billing & cost management.", managed_policy = "arn:aws:iam::aws:policy/job-function/Billing", session = "PT4H" }
   }
 }
 
