@@ -109,8 +109,13 @@ jobs:
       - name: tofu plan
         id: plan
         working-directory: live/${{ matrix.stack }}
-        run: tofu plan -input=false -no-color 2>&1 | tee plan.txt
-        continue-on-error: true
+        # Capture tofu's real exit code (pipefail; the `|| ec=$?` keeps `set -e`
+        # from killing the step so the plan comment still posts on error).
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -no-color 2>&1 | tee plan.txt || ec=$?
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
         env:
           # Stack-specific inputs. Vars a stack doesn't declare are ignored
           # (tofu just warns), so passing the full set to every stack is safe.
@@ -134,6 +139,6 @@ jobs:
               body: `### Infrastructure Plan — \`live/${{ matrix.stack }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
             });
 
-      - name: Fail if plan failed
-        if: steps.plan.outcome == 'failure'
+      - name: Fail if plan errored
+        if: steps.plan.outputs.exitcode != '0'
         run: exit 1
