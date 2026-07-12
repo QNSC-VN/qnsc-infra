@@ -33,3 +33,15 @@ variable "custom_firewall_rules" {
   default     = []
   description = "Optional custom expression firewall rules passed through to the cf-edge module."
 }
+
+variable "cloudflare_account_id" {
+  type        = string
+  default     = ""
+  description = <<-EOT
+    Cloudflare account ID that owns the qnsc.vn zone and hosts the Pages
+    projects (static sites). Supplied via TF_VAR_cloudflare_account_id in CI
+    from the CLOUDFLARE_ACCOUNT_ID org secret — the same account as
+    cloudflare_api_token. Leave empty only for plan-only bootstrapping without
+    Pages resources.
+  EOT
+}
