@@ -115,9 +115,12 @@ Only after develop is healthy.
 
 - [ ] Confirm `qnsc-gitops` CI is green and the `@v1` tag points at latest.
 - [ ] Confirm `qnsc-tf-modules` CI (fmt/validate/tflint) is green.
-- [ ] Set the GitHub repo secrets/vars on each product infra repo:
-      `AWS_ACCOUNT_ID`, `ACM_CERT_ARN_DEVELOP`, `WEB_ACM_CERT_ARN_DEVELOP`,
-      `ACM_CERT_ARN_PROD`, `WEB_ACM_CERT_ARN_PROD`.
+- [ ] Set the GitHub **org** variables (shared by every product infra repo):
+      `AWS_ACCOUNT_ID`. Add `WEB_ACM_CERT_ARN_DEVELOP` / `WEB_ACM_CERT_ARN_PROD`
+      only if a CloudFront-fronted web origin is used (Cloudflare Pages needs none).
+      The **ALB TLS cert is NOT a variable** — it is the wildcard `*.qnsc.vn` cert
+      output by the `edge` stack and consumed by `runtime-dev` / `runtime-prod`
+      via `terraform_remote_state` (single source of truth; no per-env ARN to set).
 - [ ] Create GitHub Environments `shared`, `develop`, `production` (add required
       reviewers on `production`).
 - [ ] Trigger `plan.yml` on a PR — confirm OIDC auth works and the plan comment posts.

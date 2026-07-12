@@ -208,8 +208,8 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────
   apply-runtime-dev:
     name: Apply runtime-dev
-    needs: [detect, apply-bootstrap]
-    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-dev') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    needs: [detect, apply-bootstrap, apply-edge]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-dev') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-edge.result != 'failure' && needs.apply-edge.result != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: develop
@@ -237,8 +237,6 @@ jobs:
           echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
           if [ "$ec" = "1" ]; then exit 1; fi
-        env:
-          TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_DEVELOP }}
 
       - name: tofu apply
         if: steps.plan.outputs.exitcode == '2'
@@ -247,8 +245,8 @@ jobs:
 
   apply-runtime-prod:
     name: Apply runtime-prod
-    needs: [detect, apply-bootstrap]
-    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    needs: [detect, apply-bootstrap, apply-edge]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-edge.result != 'failure' && needs.apply-edge.result != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production   # PROTECT with required reviewers
@@ -276,8 +274,6 @@ jobs:
           echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
           if [ "$ec" = "1" ]; then exit 1; fi
-        env:
-          TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_PROD }}
 
       - name: tofu apply
         if: steps.plan.outputs.exitcode == '2'
