@@ -9,6 +9,8 @@
 | GitHub OIDC provider | AWS allows only **one** per account — all products share it |
 | S3 state bucket (`qnsc-tofu-state`) | Single source of truth for all Tofu state |
 | DynamoDB lock table (`qnsc-tofu-locks`) | Prevents concurrent applies across all product repos |
+| AWS Organizations + SCPs + Identity Center (`live/organization`) | Org root, OUs, baseline guardrails, SSO permission sets — the **identity foundation** (see that stack's README) |
+| Security baseline (`live/security-baseline`) | CloudTrail + Config + GuardDuty + Access Analyzer — SOC 2 detective controls |
 
 ## What belongs in **product** infra repos
 
@@ -52,7 +54,9 @@ oidc_provider_arn = data.terraform_remote_state.platform.outputs.oidc_provider_a
 
 ```
 qnsc-tofu-state/
-  platform/bootstrap/terraform.tfstate     ← this repo
+  platform/bootstrap/terraform.tfstate     ← this repo (state backend, OIDC, KMS, artifacts)
+  platform/organization/terraform.tfstate  ← this repo (Organizations, OUs, SCPs, Identity Center)
+  platform/security-baseline/terraform.tfstate ← this repo (CloudTrail, Config, GuardDuty)
   rally/shared/terraform.tfstate           ← rally-infra _shared
   rally/develop/terraform.tfstate          ← rally-infra develop
   rally/prod/terraform.tfstate             ← rally-infra prod
