@@ -2,6 +2,7 @@ terraform {
   required_version = ">= 1.9"
 
   required_providers {
+    aws        = { source = "hashicorp/aws", version = "~> 5.0" }
     cloudflare = { source = "cloudflare/cloudflare", version = "~> 4.0" }
   }
 
@@ -19,6 +20,19 @@ terraform {
 # qnsc.vn. Leave empty to skip provider auth (e.g. plan-only bootstrapping).
 provider "cloudflare" {
   api_token = var.cloudflare_api_token != "" ? var.cloudflare_api_token : null
+}
+
+# AWS provider — ACM lives in the ALB's own region (ap-southeast-1). Regional
+# ALB certs (unlike CloudFront's us-east-1 requirement) must sit in-region.
+provider "aws" {
+  region = "ap-southeast-1"
+  default_tags {
+    tags = {
+      Org       = "qnsc"
+      ManagedBy = "opentofu"
+      Layer     = "platform"
+    }
+  }
 }
 
 # =============================================================================
@@ -63,4 +77,57 @@ module "edge" {
   enable_managed_waf = var.enable_managed_waf
 
   custom_firewall_rules = var.custom_firewall_rules
+}
+
+# =============================================================================
+# Shared wildcard TLS certificate — *.qnsc.vn in ap-southeast-1.
+#
+# One regional ACM cert fronts every product API on the shared ALB
+# (rally-api-dev.qnsc.vn, opshub-api-dev.qnsc.vn, …), so it lives here in the
+# platform edge layer, not in any product or runtime stack. Its ARN is exported
+# and consumed by runtime-dev/runtime-prod via terraform_remote_state — no human
+# ever copies a cert ARN into a GitHub variable.
+#
+# Scope is deliberately *.qnsc.vn only (no apex SAN): the ALB serves API
+# subdomains, while the apex + web hosts live on Cloudflare Pages with their own
+# edge TLS. A single-label wildcard covers every *-api-<env>.qnsc.vn host.
+#
+# Validation is DNS-01 through the same Cloudflare zone this stack already owns
+# (token: Zone:DNS:Edit). for_each is keyed on domain_name (known at plan time —
+# resource_record_name is computed and would break for_each).
+# =============================================================================
+resource "aws_acm_certificate" "wildcard" {
+  domain_name       = "*.${var.certificate_domain}"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Name = "qnsc-wildcard-${var.certificate_domain}" }
+}
+
+resource "cloudflare_record" "acm_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.wildcard.domain_validation_options :
+    dvo.domain_name => {
+      name    = dvo.resource_record_name
+      type    = dvo.resource_record_type
+      content = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
+  name            = trimsuffix(each.value.name, ".")
+  type            = each.value.type
+  content         = trimsuffix(each.value.content, ".")
+  ttl             = 60
+  proxied         = false # validation CNAME — DNS-only, never orange-clouded
+  comment         = "ACM DNS validation for *.${var.certificate_domain} (qnsc-infra/edge)"
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "wildcard" {
+  certificate_arn         = aws_acm_certificate.wildcard.arn
+  validation_record_fqdns = [for r in cloudflare_record.acm_validation : r.hostname]
 }
