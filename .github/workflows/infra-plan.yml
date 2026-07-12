@@ -10,10 +10,6 @@ name: Infrastructure · Plan
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "live/**"
-      - "modules/**"
-      - ".github/workflows/infra-plan.yml"
 
 permissions:
   contents: read
