@@ -113,11 +113,12 @@ jobs:
         id: plan
         working-directory: live/bootstrap
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
-          if [ "$ec" = "1" ]; then exit 1; fi
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
         env:
           TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
 
@@ -151,11 +152,12 @@ jobs:
         id: plan
         working-directory: live/security-baseline
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
-          if [ "$ec" = "1" ]; then exit 1; fi
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
 
       - name: tofu apply
         if: steps.plan.outputs.exitcode == '2'
@@ -187,11 +189,12 @@ jobs:
         id: plan
         working-directory: live/edge
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
-          if [ "$ec" = "1" ]; then exit 1; fi
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
@@ -228,11 +231,12 @@ jobs:
         id: plan
         working-directory: live/runtime-dev
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
-          if [ "$ec" = "1" ]; then exit 1; fi
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
         env:
           TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_DEVELOP }}
 
@@ -266,11 +270,12 @@ jobs:
         id: plan
         working-directory: live/runtime-prod
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
-          if [ "$ec" = "1" ]; then exit 1; fi
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
         env:
           TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_PROD }}
 
