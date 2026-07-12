@@ -153,3 +153,32 @@ resource "cloudflare_pages_project" "landing" {
   name              = "qnsc-landing"
   production_branch = "main"
 }
+
+# Custom domains — serve the site on the apex (qnsc.vn) and www. Two parts per
+# host: cloudflare_pages_domain registers the hostname with the Pages project
+# (so Pages answers for it), and cloudflare_record routes traffic to the
+# project's *.pages.dev origin. Proxied (orange-cloud) so Cloudflare terminates
+# TLS and flattens the CNAME at the apex. Without these, qnsc.vn has no DNS and
+# does not resolve — the site is only reachable at *.pages.dev.
+resource "cloudflare_pages_domain" "landing" {
+  for_each     = toset(["${var.certificate_domain}", "www.${var.certificate_domain}"])
+  account_id   = var.cloudflare_account_id
+  project_name = cloudflare_pages_project.landing.name
+  domain       = each.value
+}
+
+resource "cloudflare_record" "landing" {
+  for_each = {
+    (var.certificate_domain)          = var.certificate_domain # apex → CNAME-flattened
+    ("www.${var.certificate_domain}") = "www"
+  }
+
+  zone_id    = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
+  name       = each.value
+  type       = "CNAME"
+  content    = cloudflare_pages_project.landing.subdomain
+  ttl        = 1 # 1 = automatic (required when proxied)
+  proxied    = true
+  comment    = "qnsc-landing Cloudflare Pages custom domain (qnsc-infra/edge)"
+  depends_on = [cloudflare_pages_domain.landing]
+}
