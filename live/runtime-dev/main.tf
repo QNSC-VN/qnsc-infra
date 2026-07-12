@@ -47,6 +47,18 @@ data "terraform_remote_state" "bootstrap" {
   }
 }
 
+# Wildcard *.qnsc.vn ACM cert is created + validated by the edge stack. Read its
+# ARN here instead of taking it as an input variable — single source of truth,
+# no GitHub var to set/sync per environment. Applies after apply-edge (see CI).
+data "terraform_remote_state" "edge" {
+  backend = "s3"
+  config = {
+    bucket = "qnsc-tofu-state"
+    key    = "platform/edge/terraform.tfstate"
+    region = "ap-southeast-1"
+  }
+}
+
 locals {
   name   = "qnsc-runtime-dev"
   region = "ap-southeast-1"
@@ -83,15 +95,15 @@ module "network" {
 # ── Shared ALB (host-based routing across products) ───────────────────────────
 # Product api services attach a host-header listener rule (e.g.
 # rally-api-dev.qnsc.vn @ priority 100, opshub-api-dev.qnsc.vn @ 200).
-# certificate_arn must cover all product API hostnames — use a wildcard
-# *.qnsc.vn ACM cert.
+# certificate_arn is the wildcard *.qnsc.vn cert from the edge stack (read via
+# terraform_remote_state) — it covers every product API hostname on this ALB.
 module "alb" {
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.0"
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
   subnet_ids         = module.network.public_subnet_ids
-  certificate_arn    = var.acm_cert_arn
+  certificate_arn    = data.terraform_remote_state.edge.outputs.acm_cert_arn
 
   enable_deletion_protection = false # dev: easy teardown
 

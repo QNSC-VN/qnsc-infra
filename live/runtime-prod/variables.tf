@@ -1,7 +1,6 @@
-variable "acm_cert_arn" {
-  type        = string
-  description = "ACM certificate ARN for the shared ALB HTTPS listener. Use a wildcard *.qnsc.vn cert covering every product API hostname routed on this ALB."
-}
+# The shared ALB's TLS certificate is the wildcard *.qnsc.vn cert produced by the
+# edge stack, read in main.tf via terraform_remote_state (single source of truth)
+# — there is no acm_cert_arn input to set per environment.
 
 variable "tier" {
   type        = string
