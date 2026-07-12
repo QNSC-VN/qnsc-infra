@@ -109,13 +109,14 @@ jobs:
       - name: tofu plan
         id: plan
         working-directory: live/${{ matrix.stack }}
-        # Capture tofu's real exit code (pipefail; the `|| ec=$?` keeps `set -e`
-        # from killing the step so the plan comment still posts on error).
         run: |
-          set -o pipefail
-          ec=0
-          tofu plan -input=false -no-color 2>&1 | tee plan.txt || ec=$?
-          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          # The infra-plan OIDC role is read-only and has no DynamoDB write
+          # permission, so it cannot acquire the state lock. Plan never mutates
+          # state, so run lock-free (apply still locks via the admin apply role).
+          # PIPESTATUS[0] captures tofu's real exit past the `tee` pipe.
+          set +e
+          tofu plan -input=false -lock=false -no-color -detailed-exitcode -out=tfplan 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         env:
           # Stack-specific inputs. Vars a stack doesn't declare are ignored
           # (tofu just warns), so passing the full set to every stack is safe.
@@ -139,6 +140,7 @@ jobs:
               body: `### Infrastructure Plan — \`live/${{ matrix.stack }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
             });
 
+      # -detailed-exitcode: 0=no change, 2=changes (both OK for a PR), 1=error.
       - name: Fail if plan errored
-        if: steps.plan.outputs.exitcode != '0'
+        if: steps.plan.outputs.exitcode == '1'
         run: exit 1
