@@ -61,15 +61,16 @@ module "edge" {
 
   zone_id = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
 
-  # Conservative per-IP rate limit on the product API surface. Free tier allows
-  # this single rule; raise/split once on Pro+.
+  # Conservative per-IP rate limit on the product API surface. The free plan's
+  # single included rate-limiting rule only permits a 10s counting period and a
+  # 10s mitigation timeout; raise/split (e.g. 60s) once on Pro+.
   rate_limit_rules = [{
     ref                 = "api_default"
     description         = "Rate-limit product API endpoints per client IP"
     expression          = "(http.request.uri.path matches \"^/v1/\")"
-    period              = 60
+    period              = 10
     requests_per_period = 300
-    mitigation_timeout  = 60
+    mitigation_timeout  = 10
   }]
 
   # Managed + OWASP rulesets — requires Pro+. Keep false until the zone plan is
