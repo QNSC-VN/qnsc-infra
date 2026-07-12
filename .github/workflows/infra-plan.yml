@@ -66,7 +66,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -94,7 +94,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -109,8 +109,14 @@ jobs:
       - name: tofu plan
         id: plan
         working-directory: live/${{ matrix.stack }}
-        run: tofu plan -input=false -no-color 2>&1 | tee plan.txt
-        continue-on-error: true
+        run: |
+          # The infra-plan OIDC role is read-only and has no DynamoDB write
+          # permission, so it cannot acquire the state lock. Plan never mutates
+          # state, so run lock-free (apply still locks via the admin apply role).
+          # PIPESTATUS[0] captures tofu's real exit past the `tee` pipe.
+          set +e
+          tofu plan -input=false -lock=false -no-color -detailed-exitcode -out=tfplan 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         env:
           # Stack-specific inputs. Vars a stack doesn't declare are ignored
           # (tofu just warns), so passing the full set to every stack is safe.
@@ -134,6 +140,7 @@ jobs:
               body: `### Infrastructure Plan — \`live/${{ matrix.stack }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
             });
 
-      - name: Fail if plan failed
-        if: steps.plan.outcome == 'failure'
+      # -detailed-exitcode: 0=no change, 2=changes (both OK for a PR), 1=error.
+      - name: Fail if plan errored
+        if: steps.plan.outputs.exitcode == '1'
         run: exit 1

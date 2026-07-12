@@ -2,8 +2,11 @@
 # Infrastructure · Apply — applies changed live/ stacks on push to main.
 # (OpenTofu under the hood — named by capability, not tool.)
 #
-# A `detect` job diffs the push and applies ONLY the stacks that changed (a
-# modules/ or workflow change applies everything); manual dispatch applies all.
+# A `detect` job diffs the push and selects candidate stacks (a modules/ or
+# workflow change selects everything; manual dispatch selects all). Each stack
+# then plans to a saved file with -detailed-exitcode and applies ONLY that exact
+# file, and ONLY when the plan shows changes (exit 2) — an unchanged stack is
+# skipped, so a workflow/module edit never silently re-applies live infra.
 # Each stack runs under a GitHub Environment that doubles as the OIDC trust
 # boundary AND the reviewer gate, mapped to the three tiers the infra-apply
 # role trusts (see qnsc-tf-modules/modules/iam-oidc infra_apply_subjects):
@@ -95,7 +98,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -103,11 +106,25 @@ jobs:
         working-directory: live/bootstrap
         run: tofu init -input=false
 
-      - name: tofu apply
+      # Plan to a saved file (-detailed-exitcode: 0=no change, 1=error, 2=changes).
+      # We apply ONLY that exact file, and only when there are changes — an
+      # unchanged stack is skipped, so a workflow/module edit never re-applies it.
+      - name: tofu plan
+        id: plan
         working-directory: live/bootstrap
-        run: tofu apply -input=false -auto-approve
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
+          if [ "$ec" = "1" ]; then exit 1; fi
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
         env:
           TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/bootstrap
+        run: tofu apply -input=false tfplan
 
   apply-security-baseline:
     name: Apply security-baseline
@@ -122,7 +139,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -130,9 +147,20 @@ jobs:
         working-directory: live/security-baseline
         run: tofu init -input=false
 
-      - name: tofu apply
+      - name: tofu plan
+        id: plan
         working-directory: live/security-baseline
-        run: tofu apply -input=false -auto-approve
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
+          if [ "$ec" = "1" ]; then exit 1; fi
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/security-baseline
+        run: tofu apply -input=false tfplan
 
   apply-edge:
     name: Apply edge
@@ -147,7 +175,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -155,11 +183,22 @@ jobs:
         working-directory: live/edge
         run: tofu init -input=false
 
-      - name: tofu apply
+      - name: tofu plan
+        id: plan
         working-directory: live/edge
-        run: tofu apply -input=false -auto-approve
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
+          if [ "$ec" = "1" ]; then exit 1; fi
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/edge
+        run: tofu apply -input=false tfplan
 
   # ───────────────────────────────────────────────────────────────────────
   # develop / production tiers — shared runtime networking per env.
@@ -177,7 +216,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -185,11 +224,22 @@ jobs:
         working-directory: live/runtime-dev
         run: tofu init -input=false
 
-      - name: tofu apply
+      - name: tofu plan
+        id: plan
         working-directory: live/runtime-dev
-        run: tofu apply -input=false -auto-approve
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
+          if [ "$ec" = "1" ]; then exit 1; fi
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
         env:
           TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_DEVELOP }}
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/runtime-dev
+        run: tofu apply -input=false tfplan
 
   apply-runtime-prod:
     name: Apply runtime-prod
@@ -204,7 +254,7 @@ jobs:
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1
         with:
-          role-arn:     arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
 
@@ -212,8 +262,19 @@ jobs:
         working-directory: live/runtime-prod
         run: tofu init -input=false
 
-      - name: tofu apply
+      - name: tofu plan
+        id: plan
         working-directory: live/runtime-prod
-        run: tofu apply -input=false -auto-approve
+        run: |
+          set -o pipefail
+          ec=0
+          tofu plan -input=false -detailed-exitcode -out tfplan 2>&1 | tee plan.txt || ec=$?
+          if [ "$ec" = "1" ]; then exit 1; fi
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
         env:
           TF_VAR_acm_cert_arn: ${{ vars.ACM_CERT_ARN_PROD }}
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/runtime-prod
+        run: tofu apply -input=false tfplan

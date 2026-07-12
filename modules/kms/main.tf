@@ -22,13 +22,13 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 resource "aws_kms_key" "this" {
-  description             = "Shared platform CMK — encrypts RDS, Secrets Manager, S3 across all products"
-  key_usage               = "ENCRYPT_DECRYPT"
+  description              = "Shared platform CMK — encrypts RDS, Secrets Manager, S3 across all products"
+  key_usage                = "ENCRYPT_DECRYPT"
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  enable_key_rotation     = true
-  rotation_period_in_days = 365
-  deletion_window_in_days = 30   # max safety window before destroy takes effect
-  multi_region            = false
+  enable_key_rotation      = true
+  rotation_period_in_days  = 365
+  deletion_window_in_days  = 30 # max safety window before destroy takes effect
+  multi_region             = false
 
   policy = jsonencode({
     Version = "2012-10-17"
