@@ -3,11 +3,18 @@ variable "cloudflare_api_token" {
   sensitive   = true
   default     = ""
   description = <<-EOT
-    Cloudflare API token with Zone:WAF + Zone:Rulesets edit scope on qnsc.vn.
-    Supplied via TF_VAR_cloudflare_api_token in CI. Leave empty to skip provider
-    auth. The zone ID is NOT an input — it is read from qnsc-infra bootstrap
-    remote state (one source of truth).
+    Cloudflare API token with Zone:WAF + Zone:Rulesets + Zone:DNS edit scope on
+    qnsc.vn (DNS:Edit is needed to write the ACM validation records). Supplied
+    via TF_VAR_cloudflare_api_token in CI. Leave empty to skip provider auth. The
+    zone ID is NOT an input — it is read from qnsc-infra bootstrap remote state
+    (one source of truth).
   EOT
+}
+
+variable "certificate_domain" {
+  type        = string
+  default     = "qnsc.vn"
+  description = "Apex domain for the shared wildcard ACM certificate. The cert covers *.<domain> and <domain>, fronting every product API on the shared ALB."
 }
 
 variable "enable_managed_waf" {
