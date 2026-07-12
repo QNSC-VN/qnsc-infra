@@ -3,8 +3,8 @@
 # source of truth exported via remote state (like kms_key_arn, oidc_provider_arn).
 
 variable "cloudflare_zone_id" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = <<-EOT
     Cloudflare Zone ID for the qnsc.vn zone. One zone serves every product, so
     it's an account-level fact exported here (products read it from bootstrap
