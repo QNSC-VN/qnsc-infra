@@ -133,3 +133,23 @@ resource "aws_acm_certificate_validation" "wildcard" {
   certificate_arn         = aws_acm_certificate.wildcard.arn
   validation_record_fqdns = [for r in cloudflare_record.acm_validation : r.hostname]
 }
+
+# =============================================================================
+# Cloudflare Pages — static sites (qnsc-landing, …).
+#
+# The Pages *project* is infrastructure, so it is declared here in code rather
+# than clicked into existence. This makes it reproducible across account
+# migrations (a fresh Cloudflare account is one `tofu apply` away) and removes
+# any manual dashboard step — the exact failure that broke the qnsc-landing
+# deploy after the account move. The web-deploy CI only uploads built assets to
+# the already-provisioned project via `wrangler pages deploy` — pure CD, no
+# provisioning.
+#
+# Direct-upload project (no `source` block → not Git-connected). The production
+# branch is `main` to match the deploy command's `--branch=main`.
+# =============================================================================
+resource "cloudflare_pages_project" "landing" {
+  account_id        = var.cloudflare_account_id
+  name              = "qnsc-landing"
+  production_branch = "main"
+}

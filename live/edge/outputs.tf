@@ -17,3 +17,8 @@ output "acm_cert_arn" {
   value       = aws_acm_certificate_validation.wildcard.certificate_arn
   description = "Validated wildcard *.qnsc.vn ACM cert ARN (ap-southeast-1) for the shared ALB. Consumed by runtime-dev/runtime-prod via terraform_remote_state."
 }
+
+output "landing_pages_subdomain" {
+  value       = cloudflare_pages_project.landing.subdomain
+  description = "Cloudflare Pages *.pages.dev hostname for qnsc-landing (e.g. qnsc-landing.pages.dev). The qnsc-landing web-deploy CI pushes built assets here."
+}

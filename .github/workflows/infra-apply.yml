@@ -196,7 +196,8 @@ jobs:
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
           if [ "$ec" = "1" ]; then exit 1; fi
         env:
-          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_api_token:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: tofu apply
         if: steps.plan.outputs.exitcode == '2'
