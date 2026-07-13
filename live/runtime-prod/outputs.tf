@@ -17,6 +17,6 @@ output "http_listener_arn" { value = module.alb.http_listener_arn }
 output "alb_dns_name" { value = module.alb.dns_name }
 output "alb_zone_id" { value = module.alb.zone_id }
 
-# Shared cache endpoint (lean tier only; null in ha — cache is per-product then).
-output "cache_endpoint" { value = local.is_ha ? null : module.cache[0].endpoint }
-output "cache_port" { value = local.is_ha ? null : module.cache[0].port }
+# Shared cache endpoint (consumed by every product's prod stack).
+output "cache_endpoint" { value = module.cache.endpoint }
+output "cache_port" { value = module.cache.port }

@@ -2,16 +2,6 @@
 # edge stack, read in main.tf via terraform_remote_state (single source of truth)
 # — there is no acm_cert_arn input to set per environment.
 
-variable "tier" {
-  type        = string
-  default     = "lean"
-  description = "Runtime reliability tier. lean = fck-nat single-AZ + one shared cache node (Version A ~$200). ha = NAT Gateway multi-AZ + flow logs, cache moves per-product (Version B)."
-  validation {
-    condition     = contains(["lean", "ha"], var.tier)
-    error_message = "tier must be \"lean\" or \"ha\"."
-  }
-}
-
 variable "rate_limit_per_5min" {
   type        = number
   default     = 3000
@@ -21,5 +11,5 @@ variable "rate_limit_per_5min" {
 variable "enable_aws_waf" {
   type        = bool
   default     = false
-  description = "Attach the AWS WAFv2 WebACL to the shared ALB. OFF for Version A (lean): Cloudflare edge owns the WAF (rate-limit + custom rules free-tier; managed OWASP at Pro+ via the edge stack's enable_managed_waf) — see COST_POSTURE_PLAN §10, never run both. Turn ON only for HA/compliance defense-in-depth."
+  description = "Attach the AWS WAFv2 WebACL to the shared ALB. OFF by default: Cloudflare edge owns the WAF (rate-limit + custom rules free-tier; managed OWASP at Pro+ via the edge stack's enable_managed_waf) — see COST_POSTURE_PLAN §10, never run both. Turn ON only for origin-side defense-in-depth."
 }

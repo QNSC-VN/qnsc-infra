@@ -268,14 +268,6 @@ jobs:
       - name: tofu plan
         id: plan
         working-directory: live/runtime-prod
-        env:
-          # Prod reliability tier (Option A): 'lean' (default) or 'ha'. Set the
-          # PROD_TIER production var to 'ha' to switch the shared runtime to HA
-          # NAT + drop the shared cache node (products then run their own) — no
-          # code change. MUST match the product prod_tier (rally RALLY_PROD_TIER):
-          # a lean product reads the shared cache node this tier provides, so the
-          # platform tier must never be 'ha' while a product is still 'lean'.
-          TF_VAR_tier: ${{ vars.PROD_TIER || 'lean' }}
         run: |
           set +e
           tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt

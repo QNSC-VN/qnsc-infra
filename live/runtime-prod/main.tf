@@ -28,16 +28,14 @@ provider "aws" {
 # =============================================================================
 # Shared runtime layer — PRODUCTION  (STAGED — do not apply until launch)
 #
-# One VPC + NAT + ALB (+ WAF, + shared cache in lean tier) shared by ALL
-# products' prod stacks. Product prod stacks read these outputs via
-# terraform_remote_state and create ONLY their own RDS + ECS + SQS + secrets
-# + a host-based listener rule on this shared ALB.
+# One VPC + NAT + ALB (+ WAF, + one shared cache node) shared by ALL products'
+# prod stacks. Product prod stacks read these outputs via terraform_remote_state
+# and create ONLY their own RDS + ECS + SQS + secrets + a host-based listener
+# rule on this shared ALB.
 #
-# tier switch (see COST_POSTURE_PLAN Version A vs B):
-#   lean → fck-nat, single-AZ egress, no flow logs, ONE shared cache node
-#   ha   → NAT Gateway multi-AZ, flow logs; cache is per-product (NOT here)
-#
-# RDS and Fargate are always per-product and never live in this stack.
+# Runtime posture: fck-nat single-AZ egress + one shared Valkey cache node
+# (key-prefixed per product). RDS and Fargate are always per-product and never
+# live in this stack.
 # =============================================================================
 
 data "terraform_remote_state" "bootstrap" {
@@ -67,7 +65,6 @@ locals {
   azs    = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
 
   cloudflare_ipv4 = data.terraform_remote_state.bootstrap.outputs.cloudflare_ipv4
-  is_ha           = var.tier == "ha"
 }
 
 # ── Shared VPC + NAT ──────────────────────────────────────────────────────────
@@ -85,11 +82,11 @@ module "network" {
   private_subnet_cidrs = ["10.91.10.0/24", "10.91.11.0/24", "10.91.12.0/24"]
   data_subnet_cidrs    = ["10.91.20.0/24", "10.91.21.0/24", "10.91.22.0/24"]
 
-  # lean = fck-nat single-AZ (cheap); ha = NAT Gateway multi-AZ (outbound HA).
-  nat_type                = local.is_ha ? "gateway" : "instance"
-  multi_az_nat            = local.is_ha
+  # fck-nat single-AZ egress — one cost-efficient shared NAT for all prod products.
+  nat_type                = "instance"
+  multi_az_nat            = false
   app_port                = 3000
-  enable_flow_logs        = local.is_ha
+  enable_flow_logs        = false
   flow_log_retention_days = 90 # SOC 2 CC7.2 minimum (only used when flow logs on)
   alb_ingress_cidrs       = local.cloudflare_ipv4
 
@@ -124,10 +121,10 @@ module "alb" {
 }
 
 # ── WAF (regional, on the shared ALB) ─────────────────────────────────────────
-# Version A (lean): Cloudflare edge owns the WAF (see live/edge + cf-edge), so
-# this AWS WAFv2 is OFF by default (enable_aws_waf=false) to avoid double-WAF /
-# double-pay. Flip on for the HA/compliance tier if you want origin-side defense
-# in depth in addition to the edge. See COST_POSTURE_PLAN §10.
+# Cloudflare edge owns the WAF (see live/edge + cf-edge), so this AWS WAFv2 is
+# OFF by default (enable_aws_waf=false) to avoid double-WAF / double-pay. Flip on
+# only if you want origin-side defense in depth in addition to the edge. See
+# COST_POSTURE_PLAN §10.
 module "waf" {
   count  = var.enable_aws_waf ? 1 : 0
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/waf?ref=waf-v1.0.1"
@@ -139,11 +136,9 @@ module "waf" {
   tags = { Environment = "production" }
 }
 
-# ── Shared cache (LEAN tier only) ─────────────────────────────────────────────
-# lean: ONE Valkey node shared by all products (key-prefixed: rally:*, opshub:*).
-# ha:   cache is per-product (created in the product prod stack), so none here.
+# ── Shared cache ──────────────────────────────────────────────────────────────
+# ONE Valkey node shared by all products (key-prefixed: rally:*, opshub:*).
 module "cache" {
-  count  = local.is_ha ? 0 : 1
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cache?ref=cache-v1.0.0"
 
   name              = local.name
