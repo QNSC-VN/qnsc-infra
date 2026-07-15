@@ -69,4 +69,4 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: QNSC-VN/qnsc-ci/actions/scan-secrets@v1.3.0
+      - uses: QNSC-VN/qnsc-ci/actions/scan-secrets@v1.3.3
