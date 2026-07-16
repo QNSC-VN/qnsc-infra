@@ -14,6 +14,14 @@
 #   • develop    → runtime-dev, storage-dev
 #   • production → runtime-prod, storage-prod (protect with required reviewers)
 #
+# PROD IS DELIBERATE-ONLY: the production-tier jobs never run on an ordinary
+# push to main. On a push they would sit pending on the reviewer gate and, with
+# cancel-in-progress:false, hold the apply concurrency lock — blocking every
+# later dev apply. They run ONLY via a manual workflow_dispatch with
+# apply_prod=true, and are still gated by the production environment's required
+# reviewer. A normal merge applies shared + develop only. (Mirrors the
+# tag-gated prod model in the product repos.)
+#
 # NOTE: First-time bootstrap must be run manually (see live/bootstrap/main.tf
 # history — the state-backend/OIDC-provider chicken-and-egg). This workflow
 # handles subsequent changes and first-time apply of every later stack.
@@ -28,6 +36,11 @@ on:
       - "modules/**"
       - ".github/workflows/infra-apply.yml"
   workflow_dispatch:
+    inputs:
+      apply_prod:
+        description: "Also apply the production-tier stacks (runtime-prod, storage-prod). Still gated by the production environment reviewer."
+        type: boolean
+        default: false
 
 # Serialize applies on the same ref so two quick merges can't race the tofu
 # state lock. Never cancel a running apply mid-flight.
@@ -247,7 +260,10 @@ jobs:
   apply-runtime-prod:
     name: Apply runtime-prod
     needs: [detect, apply-bootstrap, apply-edge]
-    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-edge.result != 'failure' && needs.apply-edge.result != 'cancelled' }}
+    # Prod is deliberate-only: runs solely on a manual workflow_dispatch with
+    # apply_prod=true (then still reviewer-gated). Never queued on a push, so a
+    # normal merge can't leave a pending prod job holding the concurrency lock.
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'runtime-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-edge.result != 'failure' && needs.apply-edge.result != 'cancelled' && github.event_name == 'workflow_dispatch' && inputs.apply_prod }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production   # PROTECT with required reviewers
@@ -329,7 +345,10 @@ jobs:
   apply-storage-prod:
     name: Apply storage-prod
     needs: [detect, apply-bootstrap]
-    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'storage-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' }}
+    # Prod is deliberate-only: runs solely on a manual workflow_dispatch with
+    # apply_prod=true (then still reviewer-gated). Never queued on a push, so a
+    # normal merge can't leave a pending prod job holding the concurrency lock.
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'storage-prod') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && github.event_name == 'workflow_dispatch' && inputs.apply_prod }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production   # PROTECT with required reviewers
