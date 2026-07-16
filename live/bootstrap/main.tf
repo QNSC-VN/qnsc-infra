@@ -80,8 +80,14 @@ module "artifacts_bucket" {
 # can't be empty: the ecr-push role's trust policy needs at least one real
 # repo in its condition or the policy is invalid; qnsc-infra never actually
 # pushes images, so this role stays unused but harmless.
+#
+# NOTE: no infra_apply_guardrail here. This IS the platform stack that legitimately
+# manages the state bucket / lock table / OIDC provider / CMK, so it must retain
+# full control over them — the guardrail is for product applies (rally/opshub) that
+# must never touch these foundations. v2.0.1 default infra_apply_subjects
+# (environment:shared|develop|production) already match this repo's apply jobs.
 module "iam_oidc" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/iam-oidc?ref=iam-oidc-v1.1.0"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/iam-oidc?ref=iam-oidc-v2.0.1"
 
   product           = "qnsc"
   oidc_provider_arn = module.oidc_provider.arn
