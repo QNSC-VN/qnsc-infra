@@ -46,13 +46,13 @@ jobs:
           git fetch --no-tags origin "$BASE_REF"
           CHANGED="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           echo "Changed files:"; echo "$CHANGED"
-          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge"'
+          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge","storage-dev","storage-prod"'
           # A shared/module or workflow change affects every stack.
           if echo "$CHANGED" | grep -qE '^(modules/|\.github/workflows/infra-plan\.yml$)'; then
             echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
           fi
           SEL=""
-          for s in bootstrap security-baseline runtime-dev runtime-prod edge; do
+          for s in bootstrap security-baseline runtime-dev runtime-prod edge storage-dev storage-prod; do
             if echo "$CHANGED" | grep -qE "^live/$s/"; then SEL="$SEL\"$s\","; fi
           done
           echo "stacks=[${SEL%,}]" >> "$GITHUB_OUTPUT"
