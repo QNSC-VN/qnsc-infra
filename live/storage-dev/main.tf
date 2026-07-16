@@ -1,0 +1,59 @@
+terraform {
+  required_version = ">= 1.9"
+
+  required_providers {
+    cloudflare = { source = "cloudflare/cloudflare", version = "~> 5.0" }
+  }
+
+  backend "s3" {
+    bucket         = "qnsc-tofu-state"
+    key            = "platform/storage-dev/terraform.tfstate"
+    region         = "ap-southeast-1"
+    encrypt        = true
+    dynamodb_table = "qnsc-tofu-locks"
+  }
+}
+
+# Cloudflare provider — reads the token from TF_VAR_cloudflare_api_token (or the
+# CLOUDFLARE_API_TOKEN env var). Needs Account:Workers R2 Storage edit scope.
+# Leave empty to skip provider auth (e.g. plan-only bootstrapping).
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token != "" ? var.cloudflare_api_token : null
+}
+
+# =============================================================================
+# Shared object storage (develop) — Cloudflare R2 attachment buckets.
+#
+# Object storage is dedicated per-product (rally-develop-attachments,
+# opshub-develop-uploads, …), but the buckets are provisioned here in the
+# platform layer — the same place the Cloudflare provider + token already live
+# for `edge` — so the R2 admin token is centralized in one stack rather than
+# copied into every product's CI.
+#
+# This stack pins the Cloudflare provider v5 (the R2 CORS/lifecycle resources
+# are v5-only). It is deliberately isolated: the product stacks (rally, opshub)
+# stay on the v4 provider for their DNS/edge resources and consume the bucket
+# name + endpoint from this stack's outputs via terraform_remote_state — so
+# shipping R2 does not force a v4→v5 migration of live DNS/Pages/WAF.
+#
+# The bucket-scoped runtime token the app uses is created out-of-band and stored
+# in each product's Secrets Manager (never in this stack's state).
+# =============================================================================
+
+module "rally_attachments" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  account_id = var.cloudflare_account_id
+  name       = "rally-develop-attachments" # same name as the S3 bucket it replaces
+  location   = "apac"                      # co-locate with the ap-southeast-1 footprint
+
+  # Mirrors the rally-develop S3 CORS exactly (browser presigned PUT upload).
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://rally-dev.qnsc.vn", "http://localhost:5173"]
+    allowed_headers = ["Content-Type", "Content-Disposition"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+}
