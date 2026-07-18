@@ -182,3 +182,19 @@ resource "cloudflare_record" "landing" {
   comment    = "qnsc-landing Cloudflare Pages custom domain (qnsc-infra/edge)"
   depends_on = [cloudflare_pages_domain.landing]
 }
+
+# ── Turnstile — bot challenge for the qnsc-landing contact form ───────────────
+# Provisioned here (not in the landing repo) for the same reason the Pages
+# project + DNS are: it is a Cloudflare account-level resource and needs the
+# CF admin token, which is centralized in this stack. The public `sitekey` is an
+# output (baked into the client); the `secret` is set out-of-band as the Pages
+# `TURNSTILE_SECRET` env var — never injected from Terraform, matching the
+# platform's secrets-out-of-band convention (see the module README).
+module "landing_turnstile" {
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cloudflare-turnstile?ref=cloudflare-turnstile-v1.0.0"
+
+  account_id = var.cloudflare_account_id
+  name       = "qnsc-landing"
+  domains    = [var.certificate_domain, "www.${var.certificate_domain}"]
+  mode       = "managed"
+}
