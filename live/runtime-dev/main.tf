@@ -98,7 +98,7 @@ module "network" {
 # certificate_arn is the wildcard *.qnsc.vn cert from the edge stack (read via
 # terraform_remote_state) — it covers every product API hostname on this ALB.
 module "alb" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.0"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.1"
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
