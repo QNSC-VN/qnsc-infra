@@ -52,3 +52,33 @@ module "rally_attachments" {
     max_age_seconds = 3600
   }]
 }
+
+# =============================================================================
+# ceo-suite D1 pre-migration backups.
+#
+# ceo-suite holds real company financial/governance data in D1. Its deploy
+# (qnsc-ci web-deploy reusable, backup_before_migrate=true) exports the DB to a
+# restore point BEFORE every migration. That export is always kept as a 90-day
+# GitHub artifact; once this bucket exists, the deploy also archives it here for
+# durable, off-CI retention. No CORS (server-side only, written by CI via
+# `wrangler r2 object put` using the deploy's Cloudflare token). Lifecycle
+# expires backups after 90 days to bound cost.
+#
+# Enable in ceo-suite/.github/workflows/web-deploy.yml by setting
+# `d1_backup_bucket: qnsc-ceo-suite-db-backups` after this stack is applied and
+# the deploy token is granted Workers R2 Storage: Edit scope.
+# =============================================================================
+module "ceo_suite_db_backups" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  account_id = var.cloudflare_account_id
+  name       = "qnsc-ceo-suite-db-backups"
+  location   = "apac" # co-locate with the ap-southeast-1 footprint
+
+  lifecycle_rules = [{
+    id                              = "expire-backups"
+    expiration_days                 = 90
+    abort_incomplete_multipart_days = 1
+  }]
+}
