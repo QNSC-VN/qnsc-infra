@@ -33,9 +33,10 @@ provider "aws" {
 # terraform_remote_state and create ONLY their own RDS + ECS + SQS + secrets
 # + a host-based listener rule on this shared ALB (rally=100, opshub=200, …).
 #
-# Dev has NO shared cache: each product runs a Valkey sidecar inside its task
-# (single-task dev), so this stack is network + ingress only. RDS and Fargate
-# are always per-product and never live here.
+# Dev has NO shared cache here: each product's develop stack provisions its own
+# cache (rally: a single-node ElastiCache; opshub: currently a per-task Valkey
+# sidecar), so this stack is network + ingress only. RDS and Fargate are always
+# per-product and never live here.
 # =============================================================================
 
 data "terraform_remote_state" "bootstrap" {
