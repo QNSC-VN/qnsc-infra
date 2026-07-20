@@ -28,14 +28,13 @@ provider "aws" {
 # =============================================================================
 # Shared runtime layer — PRODUCTION  (STAGED — do not apply until launch)
 #
-# One VPC + NAT + ALB (+ WAF, + one shared cache node) shared by ALL products'
-# prod stacks. Product prod stacks read these outputs via terraform_remote_state
-# and create ONLY their own RDS + ECS + SQS + secrets + a host-based listener
-# rule on this shared ALB.
+# One VPC + NAT + ALB (+ WAF) shared by ALL products' prod stacks. Product prod
+# stacks read these outputs via terraform_remote_state and create ONLY their own
+# RDS + cache + ECS + SQS + secrets + a host-based listener rule on this shared
+# ALB.
 #
-# Runtime posture: fck-nat single-AZ egress + one shared Valkey cache node
-# (key-prefixed per product). RDS and Fargate are always per-product and never
-# live in this stack.
+# Runtime posture: fck-nat single-AZ egress. RDS, cache, and Fargate are always
+# per-product and never live in this stack.
 # =============================================================================
 
 data "terraform_remote_state" "bootstrap" {
@@ -136,17 +135,7 @@ module "waf" {
   tags = { Environment = "production" }
 }
 
-# ── Shared cache ──────────────────────────────────────────────────────────────
-# ONE Valkey node shared by all products (key-prefixed: rally:*, opshub:*).
-module "cache" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cache?ref=cache-v1.0.0"
-
-  name              = local.name
-  subnet_ids        = module.network.data_subnet_ids
-  security_group_id = module.network.sg_cache_id
-
-  mode      = "node" # node ~$12/mo vs serverless ~$90 floor
-  node_type = "cache.t4g.micro"
-
-  tags = { Environment = "production" }
-}
+# ── Cache ─────────────────────────────────────────────────────────────────────
+# No shared cache here — each product's prod stack owns its own dedicated Valkey
+# node (reusing sg_cache_id + data subnets from this stack), so one product can't
+# evict another's sessions. See rally/opshub infra/live/prod (module.cache).
