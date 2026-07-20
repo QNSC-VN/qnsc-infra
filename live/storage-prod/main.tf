@@ -71,6 +71,7 @@ module "rally_attachments" {
 module "ceo_suite_db_backups" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
   source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
   account_id = var.cloudflare_account_id
   name       = "qnsc-ceo-suite-db-backups"
