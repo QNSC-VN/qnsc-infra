@@ -17,6 +17,5 @@ output "http_listener_arn" { value = module.alb.http_listener_arn }
 output "alb_dns_name" { value = module.alb.dns_name }
 output "alb_zone_id" { value = module.alb.zone_id }
 
-# Shared cache endpoint (consumed by every product's prod stack).
-output "cache_endpoint" { value = module.cache.endpoint }
-output "cache_port" { value = module.cache.port }
+# Per-product cache: each product's prod stack creates its own cache node
+# (using sg_cache_id above) — no shared cache endpoint is exported here.
