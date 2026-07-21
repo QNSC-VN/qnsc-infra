@@ -25,7 +25,7 @@ provider "cloudflare" {
 # Shared object storage (develop) — Cloudflare R2 attachment buckets.
 #
 # Object storage is dedicated per-product (rally-develop-attachments,
-# opshub-develop-uploads, …), but the buckets are provisioned here in the
+# opshub-develop-attachments, …), but the buckets are provisioned here in the
 # platform layer — the same place the Cloudflare provider + token already live
 # for `edge` — so the R2 admin token is centralized in one stack rather than
 # copied into every product's CI.
@@ -52,6 +52,25 @@ module "rally_attachments" {
   cors_rules = [{
     allowed_methods = ["PUT"]
     allowed_origins = ["https://rally-dev.qnsc.vn", "http://localhost:5173"]
+    allowed_headers = ["Content-Type", "Content-Disposition"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+}
+
+module "opshub_attachments" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  account_id = var.cloudflare_account_id
+  name       = "opshub-develop-attachments" # replaces the opshub-develop S3 uploads bucket
+  location   = "apac"                       # co-locate with the ap-southeast-1 footprint
+
+  # Mirrors the opshub-develop web origin (browser presigned PUT upload).
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://opshub-dev.qnsc.vn", "http://localhost:5173"]
     allowed_headers = ["Content-Type", "Content-Disposition"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
