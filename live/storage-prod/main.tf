@@ -53,6 +53,25 @@ module "rally_attachments" {
   }]
 }
 
+module "opshub_attachments" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  account_id = var.cloudflare_account_id
+  name       = "opshub-prod-attachments" # replaces the opshub-prod S3 uploads bucket
+  location   = "apac"                    # co-locate with the ap-southeast-1 footprint
+
+  # Mirrors the opshub-prod web origin (browser presigned PUT upload).
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://opshub.qnsc.vn"]
+    allowed_headers = ["Content-Type", "Content-Disposition"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+}
+
 # =============================================================================
 # ceo-suite D1 pre-migration backups.
 #
