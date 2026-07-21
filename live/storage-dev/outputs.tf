@@ -24,3 +24,8 @@ output "opshub_attachments_endpoint" {
   value       = one(module.opshub_attachments[*].endpoint)
   description = "opshub-develop R2 S3-compatible API endpoint (inject as STORAGE_ENDPOINT)."
 }
+
+output "rally_public_assets_name" {
+  value       = one(module.rally_public_assets[*].name)
+  description = "rally-develop R2 public-assets bucket name (inject as S3_PUBLIC_ASSETS_BUCKET)."
+}

@@ -35,6 +35,7 @@ provider "cloudflare" {
 # NOTE: prod launch is gated — this stack is edited but NOT applied until launch.
 # =============================================================================
 
+
 module "rally_attachments" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
@@ -47,9 +48,24 @@ module "rally_attachments" {
   cors_rules = [{
     allowed_methods = ["PUT"]
     allowed_origins = ["https://rally.qnsc.vn"]
-    allowed_headers = ["Content-Type", "Content-Disposition"]
+    # x-amz-checksum-sha256 is REQUIRED: the presigned PUT binds the SHA-256 into
+    # its signature, so the browser must be allowed to send that header or every
+    # upload fails at preflight.
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
+  }]
+
+  # Incomplete multipart uploads are invisible in a bucket listing but still
+  # billed. Nothing else reaps them — the app-side reaper only knows about keys
+  # it has a DB row for, and an aborted multipart never produced one.
+  # TODO(cdn): attach `custom_domain` here once cf-r2-v1.1.0 is tagged, then bump
+  # the ref above and wire the module's `public_base_url` output into the product
+  # stack as CDN_PUBLIC_ASSETS_BASE_URL. Until then public assets fall back to a
+  # presigned GET — correct, just not edge-cached. Nothing consumes them yet.
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
   }]
 }
 
@@ -66,8 +82,51 @@ module "opshub_attachments" {
   cors_rules = [{
     allowed_methods = ["PUT"]
     allowed_origins = ["https://opshub.qnsc.vn"]
-    allowed_headers = ["Content-Type", "Content-Disposition"]
+    # x-amz-checksum-sha256 is REQUIRED: the presigned PUT binds the SHA-256 into
+    # its signature, so the browser must be allowed to send that header or every
+    # upload fails at preflight.
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
+  }]
+
+  # Incomplete multipart uploads are invisible in a bucket listing but still
+  # billed. Nothing else reaps them — the app-side reaper only knows about keys
+  # it has a DB row for, and an aborted multipart never produced one.
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
+  }]
+}
+
+# ── Public assets ─────────────────────────────────────────────────────────────
+# Separate bucket, deliberately. Avatars and workspace logos need long-lived,
+# cacheable, CDN-servable URLs; attachments need short-lived signed ones. Putting
+# both in one bucket means either attachments become CDN-readable by key
+# (bypassing every authorization check) or avatars cannot be cached at all.
+#
+# Nothing sensitive belongs here: everything in this bucket is readable by anyone
+# who knows the key. The app enforces that via UploadPolicy.visibility — only
+# raster-image, non-sensitive surfaces may target it.
+module "rally_public_assets" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  account_id = var.cloudflare_account_id
+  name       = "rally-prod-public-assets"
+  location   = "apac"
+
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://rally.qnsc.vn"]
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
   }]
 }

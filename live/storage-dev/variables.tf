@@ -16,8 +16,10 @@ variable "cloudflare_account_id" {
   default     = ""
   description = <<-EOT
     Cloudflare account ID that owns the R2 buckets. Supplied via
-    TF_VAR_cloudflare_account_id in CI from the CLOUDFLARE_ACCOUNT_ID org secret
-    (the same account as cloudflare_api_token). Leave empty only for plan-only
-    bootstrapping — the bucket modules are gated on it.
+    TF_VAR_cloudflare_account_id in CI from the CLOUDFLARE_ACCOUNT_ID Actions
+    VARIABLE (not a secret — the workflows read `vars.CLOUDFLARE_ACCOUNT_ID`, and
+    an account ID is not sensitive). Pairs with the CLOUDFLARE_API_TOKEN secret.
+    Leave empty only for plan-only bootstrapping — the bucket modules are gated
+    on it.
   EOT
 }
