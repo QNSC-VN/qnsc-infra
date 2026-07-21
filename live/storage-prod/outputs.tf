@@ -25,6 +25,11 @@ output "opshub_attachments_endpoint" {
   description = "opshub-prod R2 S3-compatible API endpoint (inject as STORAGE_ENDPOINT)."
 }
 
+output "rally_public_assets_name" {
+  value       = one(module.rally_public_assets[*].name)
+  description = "rally-prod R2 public-assets bucket name (inject as S3_PUBLIC_ASSETS_BUCKET)."
+}
+
 # Consumed by ceo-suite CI (web-deploy `d1_backup_bucket`) — durable archive of
 # pre-migration D1 exports. null when applied plan-only (no cloudflare_account_id).
 output "ceo_suite_db_backups_name" {
