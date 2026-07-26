@@ -90,6 +90,14 @@ For each product, then **verify before prod**:
 - [ ] **Fill secret values** (the modules create empty secrets):
       `aws secretsmanager put-secret-value ...` for each `<product>/<env>/*`.
       For RDS, the managed master password is auto-populated.
+- [ ] **R2 runtime token** (`r2-access-key-id` / `r2-secret-access-key`) — minted
+      by hand in the Cloudflare dashboard (Terraform does not create it; the
+      stack's `cloudflare_api_token` is the *provisioning* token and must never
+      be reused here). Scope it to **both** buckets of the product+env:
+      `<product>-<env>-attachments` **and** `<product>-<env>-public-assets`.
+      The app drives both through one S3 client, so a token scoped to
+      attachments alone makes every avatar/logo write fail with 403 — and only
+      at runtime, never at apply time.
 - [ ] Smoke test: ALB responds, app starts, DB + cache reachable.
 
 ---

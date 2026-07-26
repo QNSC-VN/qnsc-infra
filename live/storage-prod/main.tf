@@ -38,7 +38,7 @@ provider "cloudflare" {
 module "rally_attachments" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
-  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "rally-prod-attachments" # same name as the S3 bucket it replaces
   location   = "apac"                   # co-locate with the ap-southeast-1 footprint
@@ -47,9 +47,88 @@ module "rally_attachments" {
   cors_rules = [{
     allowed_methods = ["PUT"]
     allowed_origins = ["https://rally.qnsc.vn"]
-    allowed_headers = ["Content-Type", "Content-Disposition"]
+    # x-amz-checksum-sha256 is REQUIRED: the presigned PUT binds the SHA-256 into
+    # its signature, so the browser must be allowed to send that header or every
+    # upload fails at preflight.
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
+  }]
+
+  # Incomplete multipart uploads are invisible in a bucket listing but still
+  # billed. Nothing else reaps them — the app-side reaper only knows about keys
+  # it has a DB row for, and an aborted multipart never produced one.
+  # TODO(cdn): the module now supports `custom_domain` (cf-r2-v1.1.0). Attach it
+  # here and wire `public_base_url` into the product stack as
+  # CDN_PUBLIC_ASSETS_BASE_URL when an avatar/logo surface actually ships.
+  # Deliberately not set yet: attaching a domain creates a public DNS record for
+  # a bucket nothing reads. Until then public assets fall back to a presigned
+  # GET — correct, just not edge-cached.
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
+  }]
+}
+
+module "opshub_attachments" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  account_id = var.cloudflare_account_id
+  name       = "opshub-prod-attachments" # replaces the opshub-prod S3 uploads bucket
+  location   = "apac"                    # co-locate with the ap-southeast-1 footprint
+
+  # Mirrors the opshub-prod web origin (browser presigned PUT upload).
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://opshub.qnsc.vn"]
+    # x-amz-checksum-sha256 is REQUIRED: the presigned PUT binds the SHA-256 into
+    # its signature, so the browser must be allowed to send that header or every
+    # upload fails at preflight.
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+
+  # Incomplete multipart uploads are invisible in a bucket listing but still
+  # billed. Nothing else reaps them — the app-side reaper only knows about keys
+  # it has a DB row for, and an aborted multipart never produced one.
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
+  }]
+}
+
+# ── Public assets ─────────────────────────────────────────────────────────────
+# Separate bucket, deliberately. Avatars and workspace logos need long-lived,
+# cacheable, CDN-servable URLs; attachments need short-lived signed ones. Putting
+# both in one bucket means either attachments become CDN-readable by key
+# (bypassing every authorization check) or avatars cannot be cached at all.
+#
+# Nothing sensitive belongs here: everything in this bucket is readable by anyone
+# who knows the key. The app enforces that via UploadPolicy.visibility — only
+# raster-image, non-sensitive surfaces may target it.
+module "rally_public_assets" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  account_id = var.cloudflare_account_id
+  name       = "rally-prod-public-assets"
+  location   = "apac"
+
+  cors_rules = [{
+    allowed_methods = ["PUT"]
+    allowed_origins = ["https://rally.qnsc.vn"]
+    allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }]
+
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
   }]
 }
 
@@ -72,7 +151,7 @@ module "ceo_suite_db_backups" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
   # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
-  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.0.0"
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "qnsc-ceo-suite-db-backups"
   location   = "apac" # co-locate with the ap-southeast-1 footprint

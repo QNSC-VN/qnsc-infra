@@ -1,5 +1,5 @@
 # Platform infra — all changes require platform-lead review
-*                          @Nghia-VanTrong
-modules/                   @Nghia-VanTrong
-live/                      @Nghia-VanTrong
-.github/workflows/         @Nghia-VanTrong
+*                          @QNSC-VN/platform-infra
+modules/                   @QNSC-VN/platform-infra
+live/                      @QNSC-VN/platform-infra
+.github/workflows/         @QNSC-VN/platform-infra
