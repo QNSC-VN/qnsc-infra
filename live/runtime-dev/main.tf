@@ -103,8 +103,19 @@ module "alb" {
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
-  subnet_ids         = module.network.public_subnet_ids
   certificate_arn    = data.terraform_remote_state.edge.outputs.acm_cert_arn
+
+  # Two AZs, not three. An ALB claims one public IPv4 per enabled AZ at
+  # $0.005/hr = $3.65/mo each, and cross-zone load balancing (on by default for
+  # ALB) means a two-AZ ALB still reaches tasks in all three private subnets. Two
+  # is also the AWS minimum, so this keeps redundancy while dropping a third of
+  # the address bill on an environment nobody is paged for. Production keeps all
+  # three — see runtime-prod.
+  #
+  # The subnet list is ordered by AZ name because the module's `for_each` is keyed
+  # on the AZ, so this is deterministically 1a and 1b rather than an arbitrary pair.
+  # All three public subnets still exist; subnets themselves are free.
+  subnet_ids = slice(module.network.public_subnet_ids, 0, 2)
 
   enable_deletion_protection = false # dev: easy teardown
 

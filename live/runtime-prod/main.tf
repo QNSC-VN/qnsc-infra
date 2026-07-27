@@ -74,7 +74,32 @@ module "network" {
   region = local.region
   azs    = local.azs
 
-  enable_interface_endpoints = true # prod: cut NAT egress cost for ECR/Secrets
+  # OFF, deliberately. The module places one Interface endpoint ENI per private
+  # subnet, so three endpoints across three AZs bill 9 ENI-hours at $0.013 =
+  # ~$85/mo. Those endpoints processed 1.246 GB in July.
+  #
+  # WHEN TO TURN THIS BACK ON — the trigger is INTERNET EGRESS, not NAT processing.
+  # An fck-nat instance has no per-GB fee, so the cost of routing this traffic over
+  # NAT is the data-transfer-out charge on the far side. Measured 2026-07-28:
+  # `APS1-DataTransfer-Out-Bytes` was 12.94 GB for the month and **99% of it was ECR**
+  # (12.78 GB) — image pulls, which scale with deploy frequency, not with users. It
+  # billed $0 only because of the 100 GB/month AWS free allowance, i.e. ~15% consumed
+  # pre-launch.
+  #
+  # So: at roughly 70 GB/month of internet egress, re-enable — but pin `subnet_ids` to
+  # ONE subnet (~$28/mo, not $85), because the ECR pull path does not need per-AZ
+  # endpoints to be correct, only to be present. Past 100 GB/month the alternative is
+  # ~$0.12/GB in ap-southeast-1, which overtakes a single-subnet endpoint at ~230 GB.
+  #
+  # Check with:
+  #   aws ce get-cost-and-usage --time-period Start=<month-start>,End=<today> \
+  #     --granularity MONTHLY --metrics UsageQuantity \
+  #     --filter '{"Dimensions":{"Key":"USAGE_TYPE","Values":["APS1-DataTransfer-Out-Bytes"]}}' \
+  #     --group-by Type=DIMENSION,Key=SERVICE --region us-east-1
+  #
+  # The free S3 gateway endpoint below already carries the ECR layer blobs, which is
+  # why this number is not far worse.
+  enable_interface_endpoints = false
 
   vpc_cidr             = "10.91.0.0/16"
   public_subnet_cidrs  = ["10.91.0.0/24", "10.91.1.0/24", "10.91.2.0/24"]
@@ -110,8 +135,13 @@ module "alb" {
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
-  subnet_ids         = module.network.public_subnet_ids
   certificate_arn    = data.terraform_remote_state.edge.outputs.acm_cert_arn
+
+  # All three AZs, unlike runtime-dev's two. Each enabled AZ claims a public IPv4
+  # at $3.65/mo, and that third address is the cheapest ingress redundancy on the
+  # account: it keeps the load balancer serving when two AZs are impaired, which is
+  # the one failure mode Cloudflare in front of it cannot cover.
+  subnet_ids = module.network.public_subnet_ids
 
   enable_deletion_protection = true
   access_logs_bucket         = module.alb_logs.bucket_id
