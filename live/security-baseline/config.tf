@@ -41,9 +41,43 @@ resource "aws_iam_role_policy" "config_s3" {
 resource "aws_config_configuration_recorder" "this" {
   name     = "qnsc-recorder"
   role_arn = aws_iam_role.config.arn
+
+  # Record every supported type EXCEPT the ones that churn with deploys rather
+  # than with configuration intent. Config bills $0.003 per configuration item,
+  # and the July bill recorded 19,819 of them (~$59, the single largest line on
+  # the account) at ~730/day. That rate tracks deploy frequency, not resource
+  # count: every Fargate task launch creates and deletes a task ENI, and every
+  # image push registers a new ECS task-definition revision, across four stacks
+  # (rally + opshub × develop + prod).
+  #
+  # None of the excluded types is evaluated by any rule in `config_managed_rules`
+  # below, and CloudTrail — not Config — is the audit record for who deployed
+  # what. Excluding them removes the churn without narrowing compliance scope.
+  #
+  # EXCLUSION_BY_RESOURCE_TYPES keeps recording global (IAM) types by default,
+  # which IAM_USER_NO_POLICIES_CHECK needs; `include_global_resource_types` must
+  # stay unset because the API rejects it alongside an exclusion strategy.
   recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
+    all_supported = false
+
+    # Every entry must be a type AWS Config actually supports, or the recorder
+    # update fails with InvalidParameterValueException — the provider passes this
+    # list straight through without validating it. `AWS::ECS::Task` is deliberately
+    # absent for that reason: Config records ECS clusters, services, task
+    # definitions and task sets, not individual tasks. Task churn reaches Config as
+    # NetworkInterface events instead, which is the first entry below.
+    exclusion_by_resource_types {
+      resource_types = [
+        "AWS::EC2::NetworkInterface", # one create + one delete per Fargate task
+        "AWS::ECS::TaskDefinition",   # a new revision on every image push
+        "AWS::ECS::Service",          # changes on every rolling deploy
+        "AWS::ECS::TaskSet",
+      ]
+    }
+
+    recording_strategy {
+      use_only = "EXCLUSION_BY_RESOURCE_TYPES"
+    }
   }
 }
 
