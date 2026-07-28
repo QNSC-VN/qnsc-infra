@@ -29,3 +29,16 @@ output "rally_public_assets_name" {
   value       = one(module.rally_public_assets[*].name)
   description = "rally-develop R2 public-assets bucket name (inject as S3_PUBLIC_ASSETS_BUCKET)."
 }
+
+output "rally_public_assets_base_url" {
+  value       = one(module.rally_public_assets[*].public_base_url)
+  description = <<-EOT
+    Public HTTPS origin for rally-develop public assets — inject as
+    CDN_PUBLIC_ASSETS_BASE_URL. Null until `custom_domain` is attached, and the API
+    returns 409 on every avatar upload while it is null.
+
+    ONLY ever from the public-assets bucket. This origin serves objects to anyone
+    who knows the key, so wiring it from an attachments bucket would silently make
+    every permission-gated file world-readable.
+  EOT
+}

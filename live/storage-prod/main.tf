@@ -21,6 +21,18 @@ provider "cloudflare" {
   api_token = var.cloudflare_api_token != "" ? var.cloudflare_api_token : null
 }
 
+# The zone that owns qnsc.vn, for the public-assets custom domain below. Read from
+# bootstrap's state rather than a variable because CI only passes
+# TF_VAR_cloudflare_zone_id to live/bootstrap — the same pattern live/edge uses.
+data "terraform_remote_state" "bootstrap" {
+  backend = "s3"
+  config = {
+    bucket = "qnsc-tofu-state"
+    key    = "platform/bootstrap/terraform.tfstate"
+    region = "ap-southeast-1"
+  }
+}
+
 # =============================================================================
 # Shared object storage (prod) — Cloudflare R2 attachment buckets.
 #
@@ -58,12 +70,12 @@ module "rally_attachments" {
   # Incomplete multipart uploads are invisible in a bucket listing but still
   # billed. Nothing else reaps them — the app-side reaper only knows about keys
   # it has a DB row for, and an aborted multipart never produced one.
-  # TODO(cdn): the module now supports `custom_domain` (cf-r2-v1.1.0). Attach it
-  # here and wire `public_base_url` into the product stack as
-  # CDN_PUBLIC_ASSETS_BASE_URL when an avatar/logo surface actually ships.
-  # Deliberately not set yet: attaching a domain creates a public DNS record for
-  # a bucket nothing reads. Until then public assets fall back to a presigned
-  # GET — correct, just not edge-cached.
+  #
+  # NEVER attach `custom_domain` to THIS bucket. It holds permission-gated files;
+  # a custom domain serves objects to anyone who knows the key, with no auth and
+  # no expiry, and Terraform reports success. A TODO asking for exactly that used
+  # to sit here, having drifted up from the public-assets module it was written
+  # for — it is now on `rally_public_assets` below, where it belongs.
   lifecycle_rules = [{
     id                              = "abort-incomplete-multipart"
     abort_incomplete_multipart_days = 7
@@ -125,6 +137,15 @@ module "rally_public_assets" {
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
   }]
+
+  # Correct ONLY on this bucket: everything here is non-sensitive by construction
+  # (UploadPolicy.visibility restricts it to raster-image avatar/logo surfaces), so
+  # world-readable-by-key is the intended property rather than a leak. Without it
+  # `public_base_url` is null and the API rejects every avatar upload with 409.
+  custom_domain = {
+    hostname = "rally-assets.qnsc.vn"
+    zone_id  = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
+  }
 
   lifecycle_rules = [{
     id                              = "abort-incomplete-multipart"
