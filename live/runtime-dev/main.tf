@@ -105,17 +105,31 @@ module "alb" {
   security_group_ids = [module.network.sg_alb_id]
   certificate_arn    = data.terraform_remote_state.edge.outputs.acm_cert_arn
 
-  # Two AZs, not three. An ALB claims one public IPv4 per enabled AZ at
-  # $0.005/hr = $3.65/mo each, and cross-zone load balancing (on by default for
-  # ALB) means a two-AZ ALB still reaches tasks in all three private subnets. Two
-  # is also the AWS minimum, so this keeps redundancy while dropping a third of
-  # the address bill on an environment nobody is paged for. Production keeps all
-  # three — see runtime-prod.
+  # ALL THREE AZs, matching runtime-prod. This was `slice(..., 0, 2)` to save one
+  # public IPv4 ($0.005/hr = $3.65/mo), on the stated grounds that "cross-zone load
+  # balancing means a two-AZ ALB still reaches tasks in all three private subnets".
   #
-  # The subnet list is ordered by AZ name because the module's `for_each` is keyed
-  # on the AZ, so this is deterministically 1a and 1b rather than an arbitrary pair.
-  # All three public subnets still exist; subnets themselves are free.
-  subnet_ids = slice(module.network.public_subnet_ids, 0, 2)
+  # That is false, and it cost far more than $3.65. Cross-zone load balancing spreads
+  # traffic across targets in the ALB's ENABLED AZs; a target in an AZ the ALB has no
+  # subnet in is not reachable at all. AWS says so in as many words — the ECS service
+  # event reads:
+  #
+  #   (port 3000) is unhealthy in (target-group .../opshub-develop-api/...) due to
+  #   (reason Target is in an Availability Zone that is not enabled for the load balancer)
+  #
+  # Every ECS service here runs across all three PRIVATE subnets, so roughly one task
+  # placement in three landed in 1c, could never pass a health check, and was rolled
+  # back by the deployment circuit breaker. Both products were affected, and it presented
+  # as flaky deploys: the same commit succeeded or failed depending on where the
+  # scheduler happened to put the task. It is what rolled back opshub's BFF deploy
+  # (QNSC-VN/opshub#85) after the image, the migrations and both services had gone out
+  # cleanly.
+  #
+  # The alternative — keep two ALB AZs and pin every product's ECS service to the
+  # matching two private subnets — saves the $3.65 but couples each product's service
+  # config to this file's slice, which is the same hidden constraint that produced this
+  # bug. One address is cheaper than that.
+  subnet_ids = module.network.public_subnet_ids
 
   enable_deletion_protection = false # dev: easy teardown
 
