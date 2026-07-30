@@ -79,6 +79,43 @@ resource "aws_config_configuration_recorder" "this" {
       use_only = "EXCLUSION_BY_RESOURCE_TYPES"
     }
   }
+
+  # DAILY base cadence, CONTINUOUS only where a rule actually needs it.
+  #
+  # The exclusions above removed the deploy churn, but the recorder was still
+  # CONTINUOUS for everything else and Config remained ~$22/mo — 9% of the account,
+  # on a single pre-production account whose audit record is CloudTrail. Config bills
+  # per configuration item, so cadence is the remaining lever after scope.
+  #
+  # DAILY is not free of consequence: a change-triggered rule only evaluates when an
+  # item is recorded, so a daily cadence delays detection by up to 24 hours. That is a
+  # security-posture trade, not a pure saving, which is why it is NOT applied to the
+  # types the rules below actually evaluate.
+  recording_mode {
+    recording_frequency = "DAILY"
+
+    # The subjects of every CHANGE-TRIGGERED rule in `config_managed_rules`:
+    # S3_BUCKET_PUBLIC_{READ,WRITE}_PROHIBITED -> S3::Bucket, ENCRYPTED_VOLUMES ->
+    # EC2::Volume, RDS_STORAGE_ENCRYPTED + RDS_INSTANCE_PUBLIC_ACCESS_CHECK ->
+    # RDS::DBInstance. These keep minute-scale detection: a bucket going public or an
+    # unencrypted database appearing are exactly the things worth knowing about now
+    # rather than tomorrow, and there are 5 buckets, 2 volumes and 3 instances on the
+    # account — the item volume is negligible, so continuous costs almost nothing here.
+    #
+    # CLOUD_TRAIL_ENABLED is deliberately absent: it is a PERIODIC rule, evaluated on
+    # its own schedule rather than on configuration items, so cadence cannot affect it.
+    #
+    # IAM_USER_NO_POLICIES_CHECK is also absent, for a different reason — its subject
+    # is a GLOBAL type, which recording-mode overrides do not accept, and the account
+    # has zero IAM users (access is SSO-only). The rule has nothing to evaluate, so the
+    # base cadence applying to IAM changes nothing. Revisit if an IAM user is ever
+    # created.
+    recording_mode_override {
+      description         = "Subjects of the change-triggered rules in config_managed_rules"
+      resource_types      = ["AWS::S3::Bucket", "AWS::EC2::Volume", "AWS::RDS::DBInstance"]
+      recording_frequency = "CONTINUOUS"
+    }
+  }
 }
 
 resource "aws_config_delivery_channel" "this" {
