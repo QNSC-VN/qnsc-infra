@@ -126,11 +126,31 @@ module "alb_logs" {
 }
 
 # ── Shared ALB (host-based routing across products) ───────────────────────────
-# Deletion protection on + access logs. Products attach host-header listener
-# rules (rally-api.qnsc.vn @100, opshub-api.qnsc.vn @200). certificate_arn is the
-# wildcard *.qnsc.vn cert from the edge stack (read via terraform_remote_state) —
-# it covers every product API hostname on this ALB.
+# certificate_arn is the wildcard *.qnsc.vn cert from the edge stack (read via
+# terraform_remote_state) — it covers every product API hostname on this ALB.
+#
+# ABSENT (var.enable_alb = false, 2026-08-02). rally's production api serves through a
+# Cloudflare Tunnel sidecar (QNSC-VN/rally#326), so it attaches no listener rule and no
+# target group. Measured after that cutover: ZERO target groups and one default rule
+# forwarding nowhere — $18.40/mo plus $10.95 for three public IPv4, buying nothing.
+#
+# THIS WAS ALSO THE ROLLBACK PATH, and deleting it was a deliberate trade. Production's
+# tunnel has never carried a request (production runs zero tasks, so no connector is
+# running), so if it fails at go-live the recovery is now: enable_alb = true, apply,
+# tunnel_enabled = false in the product stack, apply, redeploy — roughly 25-30 minutes,
+# and the recreated load balancer gets a NEW DNS name that has to propagate. With the
+# ALB kept it would have been ~15 minutes and no DNS change.
+#
+# TO BRING IT BACK: enable_alb = true here first, THEN tunnel_enabled = false in the
+# product stack. That order matters — a product attaching a host-header rule fails if
+# the listener does not exist yet. Restore enable_deletion_protection at the same time.
+#
+# NOT deleted from the file: opshub's production stack is still written against this
+# layer's https_listener_arn. Nothing of opshub is deployed, but the next product to
+# adopt production needs either this ALB back or its own tunnel.
 module "alb" {
+  count = var.enable_alb ? 1 : 0
+
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.1"
 
   name               = local.name
@@ -143,7 +163,10 @@ module "alb" {
   # the one failure mode Cloudflare in front of it cannot cover.
   subnet_ids = module.network.public_subnet_ids
 
-  enable_deletion_protection = true
+  # FALSE while enable_alb gates this module: deletion protection would make
+  # `enable_alb = false` fail the apply rather than delete, which is the opposite of
+  # what the flag is for. Restore to true in the same change that turns the ALB back on.
+  enable_deletion_protection = false
   access_logs_bucket         = module.alb_logs.bucket_id
 
   tags = { Environment = "production" }
@@ -155,11 +178,11 @@ module "alb" {
 # only if you want origin-side defense in depth in addition to the edge. See
 # COST_POSTURE_PLAN §10.
 module "waf" {
-  count  = var.enable_aws_waf ? 1 : 0
+  count  = var.enable_aws_waf && var.enable_alb ? 1 : 0
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/waf?ref=waf-v1.1.1"
 
   name                = local.name
-  alb_arn             = module.alb.arn
+  alb_arn             = module.alb[0].arn
   rate_limit_per_5min = var.rate_limit_per_5min
 
   tags = { Environment = "production" }
