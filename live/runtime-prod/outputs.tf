@@ -12,14 +12,14 @@ output "sg_rds_id" { value = module.network.sg_rds_id }
 output "sg_cache_id" { value = module.network.sg_cache_id }
 
 # Shared ALB — products attach a host-header listener rule to https_listener_arn:
-output "https_listener_arn" { value = module.alb.https_listener_arn }
-output "http_listener_arn" { value = module.alb.http_listener_arn }
-output "alb_dns_name" { value = module.alb.dns_name }
+output "https_listener_arn" { value = try(module.alb[0].https_listener_arn, null) }
+output "http_listener_arn" { value = try(module.alb[0].http_listener_arn, null) }
+output "alb_dns_name" { value = try(module.alb[0].dns_name, null) }
 # Full ALB ARN. Needed by the shared observability module, which derives the
 # CloudWatch `LoadBalancer` dimension (app/<name>/<id>) from it — the listener ARN
 # cannot substitute, since it carries an extra listener segment.
-output "alb_arn" { value = module.alb.arn }
-output "alb_zone_id" { value = module.alb.zone_id }
+output "alb_arn" { value = try(module.alb[0].arn, null) }
+output "alb_zone_id" { value = try(module.alb[0].zone_id, null) }
 
 # Per-product cache: each product's prod stack creates its own cache node
 # (using sg_cache_id above) — no shared cache endpoint is exported here.
