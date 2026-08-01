@@ -128,11 +128,25 @@ module "network" {
 }
 
 # ── Shared ALB (host-based routing across products) ───────────────────────────
-# Product api services attach a host-header listener rule (e.g.
-# rally-api-dev.qnsc.vn @ priority 100, opshub-api-dev.qnsc.vn @ 200).
 # certificate_arn is the wildcard *.qnsc.vn cert from the edge stack (read via
 # terraform_remote_state) — it covers every product API hostname on this ALB.
+#
+# ABSENT (var.enable_alb = false, 2026-08-02). rally's develop api now serves through a
+# Cloudflare Tunnel sidecar (QNSC-VN/rally, `tunnel_enabled`), so it attaches no
+# listener rule and no target group. Measured immediately after that cutover: this load
+# balancer had ZERO target groups and one default rule forwarding nowhere — $18.40/mo
+# plus $7.30 for two public IPv4, buying nothing.
+#
+# TO BRING IT BACK: set enable_alb = true and apply, then set `tunnel_enabled = false`
+# in the consuming product stack and redeploy. Order matters — a product attaching a
+# host-header rule fails if the listener does not exist yet.
+#
+# NOT deleted from the file, because opshub's develop stack is still written against
+# this layer's `https_listener_arn`. Nothing of opshub is deployed today, but the next
+# product to adopt develop needs either this ALB back or its own tunnel.
 module "alb" {
+  count = var.enable_alb ? 1 : 0
+
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.1"
 
   name               = local.name
