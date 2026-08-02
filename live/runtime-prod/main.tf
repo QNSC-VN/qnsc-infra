@@ -68,7 +68,7 @@ locals {
 
 # ── Shared VPC + NAT ──────────────────────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.1.2"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.2.0"
 
   name   = local.name
   region = local.region
@@ -106,8 +106,17 @@ module "network" {
   private_subnet_cidrs = ["10.91.10.0/24", "10.91.11.0/24", "10.91.12.0/24"]
   data_subnet_cidrs    = ["10.91.20.0/24", "10.91.21.0/24", "10.91.22.0/24"]
 
-  # fck-nat single-AZ egress — one cost-efficient shared NAT for all prod products.
-  nat_type                = "instance"
+  # NONE while production is pre-launch. Both product services sit at min_count = 0, so
+  # there are no tasks to route and a fck-nat instance is $4.16/mo of pure waste. The
+  # private route tables still exist and are still associated — they just carry no
+  # default route.
+  #
+  # RESTORE TO "instance" AT GO-LIVE, in the same change that restores min_count. Fargate
+  # cannot pull from ECR, read secrets or reach R2 without egress, and the cloudflared
+  # sidecar cannot dial out to Cloudflare — so with this at "none" a production task has
+  # no ingress either. That failure appears at task start
+  # (ResourceInitializationError), not at apply, so nothing warns you.
+  nat_type                = "none"
   multi_az_nat            = false
   app_port                = 3000
   enable_flow_logs        = false
