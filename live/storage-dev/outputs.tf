@@ -42,3 +42,23 @@ output "rally_public_assets_base_url" {
     every permission-gated file world-readable.
   EOT
 }
+
+# Consumed by the qnsc-kb develop stack via terraform_remote_state
+# (platform/storage-dev) — injected into the api/worker tasks as
+# SOURCE_STORAGE_BUCKET + S3_ENDPOINT_URL, alongside SOURCE_STORAGE_BACKEND="r2".
+# null when the stack is applied plan-only (no cloudflare_account_id).
+output "qnsc_kb_sources_name" {
+  value       = one(module.qnsc_kb_sources[*].name)
+  description = "qnsc-kb-develop R2 sources bucket name (inject as SOURCE_STORAGE_BUCKET)."
+}
+
+output "qnsc_kb_sources_endpoint" {
+  value       = one(module.qnsc_kb_sources[*].endpoint)
+  description = <<-EOT
+    qnsc-kb-develop R2 S3-compatible API endpoint (inject as S3_ENDPOINT_URL).
+
+    The app's config validator accepts either this or R2_ACCOUNT_ID; passing the
+    endpoint is preferred because it is an output of the resource itself, so it
+    cannot drift from the bucket it addresses.
+  EOT
+}

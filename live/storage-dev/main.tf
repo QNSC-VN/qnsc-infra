@@ -163,3 +163,32 @@ module "rally_public_assets" {
   }]
 }
 
+
+# ── qnsc-kb · develop · knowledge sources ────────────────────────────────────
+# Holds the ORIGINAL uploaded documents (pdf/docx/xlsx/pptx/images) that the RAG
+# pipeline extracts text from. The extracted text, chunks and embeddings live in
+# Postgres; this bucket is the only copy of the source file itself.
+#
+# NO cors_rules, deliberately — unlike the rally buckets above, nothing uploads to
+# this bucket from a browser. qnsc-kb receives the file at its own API
+# (MAX_SOURCE_UPLOAD_BYTES, malware scan, extraction), then writes it server-side via
+# src/domain/source_storage.py. Adding CORS here would advertise a direct-to-bucket
+# path that bypasses both the size limit and the virus scan.
+#
+# Private, and it must stay private: the app serves originals only after its own
+# authorization check and never returns an object URL. There is no custom_domain for
+# the same reason — a public origin would make every uploaded document readable by
+# anyone who learns the key, which for a knowledge base is the whole corpus.
+module "qnsc_kb_sources" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  account_id = var.cloudflare_account_id
+  name       = "qnsc-kb-develop-sources"
+  location   = "apac" # co-locate with the ap-southeast-1 footprint
+
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
+  }]
+}
