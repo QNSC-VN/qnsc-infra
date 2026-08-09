@@ -192,3 +192,23 @@ module "qnsc_kb_sources" {
     abort_incomplete_multipart_days = 7
   }]
 }
+
+# ── Adopt the pre-existing qnsc-kb sources bucket ────────────────────────────
+# The bucket was created by hand before this stack described it — the R2 API token
+# scoped to it is dated the same day — so the first apply failed with
+#
+#   409 Conflict  10004  "The bucket you tried to create already exists, and you own it"
+#
+# An import block rather than a manual `tofu import`: the credential that can write to
+# Cloudflare lives in CI, not on anyone's laptop, so the adoption belongs in the same
+# place every other change to this stack happens.
+#
+# SAFE TO REMOVE once applied. An import block whose target is already in state is a
+# no-op, so leaving it costs nothing but noise — delete it on the next edit to this file.
+import {
+  to = module.qnsc_kb_sources[0].cloudflare_r2_bucket.this
+  # Three segments, not two: the provider wants "<account_id>/<bucket>/<jurisdiction>".
+  # "default" is the standard jurisdiction — the alternatives ("eu", "fedramp") place a
+  # bucket under a specific regulatory boundary, and this bucket has none.
+  id = "${var.cloudflare_account_id}/qnsc-kb-develop-sources/default"
+}
