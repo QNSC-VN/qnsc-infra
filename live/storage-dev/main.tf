@@ -207,5 +207,8 @@ module "qnsc_kb_sources" {
 # no-op, so leaving it costs nothing but noise — delete it on the next edit to this file.
 import {
   to = module.qnsc_kb_sources[0].cloudflare_r2_bucket.this
-  id = "${var.cloudflare_account_id}/qnsc-kb-develop-sources"
+  # Three segments, not two: the provider wants "<account_id>/<bucket>/<jurisdiction>".
+  # "default" is the standard jurisdiction — the alternatives ("eu", "fedramp") place a
+  # bucket under a specific regulatory boundary, and this bucket has none.
+  id = "${var.cloudflare_account_id}/qnsc-kb-develop-sources/default"
 }
