@@ -49,3 +49,15 @@ output "ceo_suite_db_backups_name" {
   value       = one(module.ceo_suite_db_backups[*].name)
   description = "ceo-suite D1 backup R2 bucket name (set as web-deploy d1_backup_bucket)."
 }
+
+# Consumed by the qnsc-kb prod stack via terraform_remote_state (platform/storage-prod) —
+# injected as SOURCE_STORAGE_BUCKET + S3_ENDPOINT_URL alongside SOURCE_STORAGE_BACKEND="r2".
+output "qnsc_kb_sources_name" {
+  value       = one(module.qnsc_kb_sources[*].name)
+  description = "qnsc-kb-prod R2 sources bucket name (inject as SOURCE_STORAGE_BUCKET)."
+}
+
+output "qnsc_kb_sources_endpoint" {
+  value       = one(module.qnsc_kb_sources[*].endpoint)
+  description = "qnsc-kb-prod R2 S3-compatible API endpoint (inject as S3_ENDPOINT_URL)."
+}
