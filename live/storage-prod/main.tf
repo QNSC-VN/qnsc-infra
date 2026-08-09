@@ -183,3 +183,31 @@ module "ceo_suite_db_backups" {
     abort_incomplete_multipart_days = 1
   }]
 }
+
+# ── qnsc-kb · production · knowledge sources ─────────────────────────────────
+# Mirror of the develop bucket in live/storage-dev. Holds the ORIGINAL uploaded
+# documents the RAG pipeline extracts text from — the extracted text, chunks and
+# embeddings live in Postgres, so this is the only copy of the source file itself.
+#
+# Created now, before production serves anyone, because the qnsc-kb prod stack reads
+# these outputs on every plan: without them the plan fails on an "Invalid index" against
+# a remote-state output that does not exist, which reads as a fault in the product stack
+# rather than a missing bucket here.
+#
+# NO cors_rules and NO custom_domain, exactly as in develop. Nothing uploads from a
+# browser — the API receives the file, enforces the size limit and the malware scan, then
+# writes it server-side. A public origin would make every uploaded document readable by
+# anyone who learns the key, which for a knowledge base is the whole corpus.
+module "qnsc_kb_sources" {
+  count = var.cloudflare_account_id != "" ? 1 : 0
+
+  source     = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  account_id = var.cloudflare_account_id
+  name       = "qnsc-kb-prod-sources"
+  location   = "apac"
+
+  lifecycle_rules = [{
+    id                              = "abort-incomplete-multipart"
+    abort_incomplete_multipart_days = 7
+  }]
+}
