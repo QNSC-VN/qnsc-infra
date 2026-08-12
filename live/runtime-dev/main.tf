@@ -106,7 +106,7 @@ locals {
 
 # ── Shared VPC + fck-nat (egress only) ────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.1.2"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.2.0"
 
   name   = local.name
   region = local.region
