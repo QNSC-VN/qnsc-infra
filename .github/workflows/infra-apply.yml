@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -151,7 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -231,7 +231,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -271,7 +271,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -313,7 +313,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
@@ -356,7 +356,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.6.3
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
           aws-region:   ${{ env.AWS_REGION }}
