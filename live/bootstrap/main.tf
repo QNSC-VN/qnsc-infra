@@ -87,7 +87,7 @@ module "artifacts_bucket" {
 # must never touch these foundations. v2.0.1 default infra_apply_subjects
 # (environment:shared|develop|production) already match this repo's apply jobs.
 module "iam_oidc" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/iam-oidc?ref=iam-oidc-v2.0.1"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/iam-oidc?ref=iam-oidc-v3.0.1"
 
   product           = "qnsc"
   oidc_provider_arn = module.oidc_provider.arn
