@@ -106,7 +106,7 @@ locals {
 
 # ── Shared VPC + fck-nat (egress only) ────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.2.0"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.3.0"
 
   name   = local.name
   region = local.region
@@ -119,7 +119,30 @@ module "network" {
   private_subnet_cidrs = ["10.90.10.0/24", "10.90.11.0/24", "10.90.12.0/24"]
   data_subnet_cidrs    = ["10.90.20.0/24", "10.90.21.0/24", "10.90.22.0/24"]
 
-  nat_type          = "instance" # fck-nat t4g.nano ~$3/mo vs NAT GW ~$33/mo
+  nat_type = "instance" # fck-nat t4g.nano ~$3/mo vs NAT GW ~$33/mo
+
+  // Turns the NAT box into an SSM jump host so a developer can port-forward to RDS and
+  // the cache from a laptop, without the databases being publicly accessible:
+  //
+  //   aws ssm start-session --target <nat-instance-id> \
+  //     --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  //     --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["15432"]}'
+  //
+  // Then point DBeaver at localhost:15432. For the cache the local end must speak TLS
+  // (`redis-cli --tls`), because transit encryption is on.
+  //
+  // Zero cost: the NAT already runs and already has the egress the SSM agent needs. A
+  // dedicated bastion is another instance, an always-on cloudflared is another task, and
+  // a publicly-accessible database costs nothing until the day it costs everything.
+  //
+  // DEVELOP ONLY — runtime-prod leaves this at its default of false. A laptop-to-data-tier
+  // path is reasonable here and a deliberate decision there.
+  //
+  // Access is governed by IAM (who may call ssm:StartSession), not by the network, and
+  // every session is recorded in CloudTrail. Note that only one Identity Center user
+  // exists today, so this grants nothing to the team until they have accounts and a
+  // permission set scoped to this instance and the develop secrets.
+  nat_ssm_bastion   = true
   app_port          = 3000
   enable_flow_logs  = false
   alb_ingress_cidrs = local.cloudflare_ipv4 # lock ALB to Cloudflare orange-cloud IPs
