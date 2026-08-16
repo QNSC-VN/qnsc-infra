@@ -119,7 +119,7 @@ module "network" {
   private_subnet_cidrs = ["10.90.10.0/24", "10.90.11.0/24", "10.90.12.0/24"]
   data_subnet_cidrs    = ["10.90.20.0/24", "10.90.21.0/24", "10.90.22.0/24"]
 
-  nat_type          = "instance" # fck-nat t4g.nano ~$3/mo vs NAT GW ~$33/mo
+  nat_type = "instance" # fck-nat t4g.nano ~$3/mo vs NAT GW ~$33/mo
 
   // Turns the NAT box into an SSM jump host so a developer can port-forward to RDS and
   // the cache from a laptop, without the databases being publicly accessible:
