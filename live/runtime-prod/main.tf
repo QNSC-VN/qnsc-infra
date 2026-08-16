@@ -68,7 +68,7 @@ locals {
 
 # ── Shared VPC + NAT ──────────────────────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.3.0"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.2.0"
 
   name   = local.name
   region = local.region
