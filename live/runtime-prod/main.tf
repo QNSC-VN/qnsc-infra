@@ -26,7 +26,7 @@ provider "aws" {
 }
 
 # =============================================================================
-# Shared runtime layer — PRODUCTION  (STAGED — do not apply until launch)
+# Shared runtime layer — PRODUCTION  (LIVE as of go-live, rally#445)
 #
 # One VPC + NAT + ALB (+ WAF) shared by ALL products' prod stacks. Product prod
 # stacks read these outputs via terraform_remote_state and create ONLY their own
@@ -106,17 +106,53 @@ module "network" {
   private_subnet_cidrs = ["10.91.10.0/24", "10.91.11.0/24", "10.91.12.0/24"]
   data_subnet_cidrs    = ["10.91.20.0/24", "10.91.21.0/24", "10.91.22.0/24"]
 
-  # NONE while production is pre-launch. Both product services sit at min_count = 0, so
-  # there are no tasks to route and a fck-nat instance is $4.16/mo of pure waste. The
-  # private route tables still exist and are still associated — they just carry no
-  # default route.
+  # INSTANCE, restored for go-live (rally#445 takes both services off min_count = 0).
   #
-  # RESTORE TO "instance" AT GO-LIVE, in the same change that restores min_count. Fargate
-  # cannot pull from ECR, read secrets or reach R2 without egress, and the cloudflared
-  # sidecar cannot dial out to Cloudflare — so with this at "none" a production task has
-  # no ingress either. That failure appears at task start
-  # (ResourceInitializationError), not at apply, so nothing warns you.
-  nat_type                = "none"
+  # This is not optional and it is not a monitoring nicety. With "none" the private route
+  # tables carry no default route, so a Fargate task cannot pull from ECR, cannot read
+  # Secrets Manager, cannot reach R2, and the cloudflared sidecar cannot dial out to
+  # Cloudflare — meaning production has no INGRESS either, not merely no egress. The
+  # failure appears at task start as `ResourceInitializationError`, not at apply, so
+  # nothing about the Terraform run warns you. It was "none" while both services sat at
+  # min_count = 0 and there was nothing to route; a fck-nat instance was $4.16/mo of pure
+  # waste for those fifteen days.
+  #
+  # A fck-nat t4g.nano, ~$4.16/mo, and there is no cheaper correct option: a NAT gateway
+  # is ~$33/mo for the same job, and interface endpoints are ~$85/mo across three AZs
+  # (see the note above, which also gives the egress threshold at which that flips).
+  #
+  # SINGLE-AZ by construction, not by choice of flag — see multi_az_nat below.
+  nat_type = "instance"
+
+  # INERT while nat_type = "instance", and kept only so it does not read as an oversight.
+  # The module branches on it in the GATEWAY path alone
+  # (`nat_azs = var.nat_type == "gateway" ? ...`); instance mode always creates exactly
+  # ONE aws_instance, pinned to the public subnet in `azs[0]`. Setting this true would
+  # change nothing — there is no per-AZ NAT-instance mode to select.
+  #
+  # So single-AZ egress is a property of nat_type here, not of this flag, and the exposure
+  # is worth stating rather than leaving to be discovered:
+  #
+  #   - HOST failure underneath the instance: AWS simplified automatic recovery is on by
+  #     default for Nitro types, and migrates it in place — same AZ, same ENI, so the
+  #     private route tables stay valid. Automatic, minutes.
+  #   - The INSTANCE terminating, or its OS wedging: the route tables point at
+  #     `aws_instance.nat[0].primary_network_interface_id`, which is then a dead ENI.
+  #     Nothing recreates it. Recovery is `tofu apply`. THERE IS NO ASG HERE.
+  #   - `ap-southeast-1a` failing: all three private route tables point at that one ENI,
+  #     so every private subnet loses egress, not only the subnet in the failed AZ.
+  #     Recovery means moving the instance to another AZ — a change to `azs`, then apply.
+  #
+  # In all three, tasks ALREADY RUNNING keep serving: cloudflared holds its established
+  # outbound connections, and the app reaches RDS and the cache inside the VPC. What
+  # breaks is anything that must start — no image pull, no secret read, no new task.
+  #
+  # ACCEPTED, because every layer behind it carries the same exposure: production is
+  # deliberately single-AZ at the database (rds.multi_az = false) and runs one task per
+  # service. Removing it here alone would buy redundancy nothing else has. Revisit it WITH
+  # the RDS Multi-AZ decision — the same question asked at two layers — and note the fix
+  # is then a NAT GATEWAY per AZ (nat_type = "gateway", multi_az_nat = true, ~$99/mo),
+  # since the module offers no multi-instance mode.
   multi_az_nat            = false
   app_port                = 3000
   enable_flow_logs        = false
