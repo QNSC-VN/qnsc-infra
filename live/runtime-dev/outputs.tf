@@ -44,3 +44,12 @@ output "alb_dns_name" { value = try(module.alb[0].dns_name, null) }
 # cannot substitute, since it carries an extra listener segment.
 output "alb_arn" { value = try(module.alb[0].arn, null) }
 output "alb_zone_id" { value = try(module.alb[0].zone_id, null) }
+
+# Shared develop cache. NULL when var.enable_shared_cache is false, so a product stack
+# reading these while the node does not exist fails loudly rather than building a URL
+# pointing at nothing.
+#
+# Consume with a database index — see the note on module.shared_cache. The endpoint alone
+# is not enough: two products on one node must not share database 0.
+output "cache_endpoint" { value = try(module.shared_cache[0].endpoint, null) }
+output "cache_port" { value = try(module.shared_cache[0].port, null) }

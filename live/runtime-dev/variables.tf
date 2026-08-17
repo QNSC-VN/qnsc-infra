@@ -20,3 +20,23 @@ variable "enable_alb" {
     recreating is minutes.
   EOT
 }
+
+variable "enable_shared_cache" {
+  type = bool
+  # TRUE is the deployed setting: this stack has no .tfvars and CI passes no TF_VAR, so
+  # the default IS the configuration. It is a variable rather than a hardcoded resource
+  # only so the node can be removed in one line if the sharing arrangement is ever
+  # unwound — not because anyone is expected to flip it.
+  default     = true
+  description = <<-EOT
+    Create ONE Valkey node in this layer for every product's develop stack to share,
+    replacing one cache.t4g.micro per product ($15.45/mo instead of $30.90).
+
+    Products select it per stack; nothing here forces adoption. A product that sets
+    `cache.shared = false` still gets its own node, which is the correct choice for
+    anything that cannot tolerate sharing a server with another product.
+
+    See module.shared_cache in main.tf for how database indexes and the eviction policy
+    keep two products safe on one node — in particular that qnsc-kb runs Celery on it.
+  EOT
+}
