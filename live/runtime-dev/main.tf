@@ -256,6 +256,10 @@ module "alb" {
 module "shared_cache" {
   count = var.enable_shared_cache ? 1 : 0
 
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag — matches
+  # every other module source in this layer, and the tags are what scripts/pin_drift.py in
+  # qnsc-ci compares across repos. A commit hash would satisfy the check and make the pin
+  # invisible to that report.
   source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cache?ref=cache-v1.0.0"
 
   name              = "${local.name}-cache"
