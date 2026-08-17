@@ -210,3 +210,71 @@ module "alb" {
 
   tags = { Environment = "develop" }
 }
+
+# ── Shared develop cache ──────────────────────────────────────────────────────
+# ONE Valkey node for every product's develop stack, instead of one per product.
+#
+# WHY THIS MOVED HERE. rally-develop and qnsc-kb-develop each ran their own
+# cache.t4g.micro. Measured 2026-08-01..16, ElastiCache was $20.17/mo run-rate and rising
+# to $30.90 as both nodes stayed up around the clock — the largest single reducible line
+# on the account. They are always-on because ElastiCache has no stopped state, so the
+# nightly idle schedule that scales dev services to zero does not touch them. Two nodes
+# at 0.5 GiB each, holding a few thousand keys between them, for $15.45 apiece.
+#
+# The cache belongs in this layer for the same reason the VPC, the NAT and the security
+# groups do: it is infrastructure every product's dev stack needs and none of them owns.
+# `sg_cache_id` was ALREADY shared from here — both product caches sat behind the same
+# security group in the same data subnets. Only the node was duplicated.
+#
+# DEVELOP ONLY. runtime-prod deliberately has no equivalent: production products keep
+# their own node, because a shared cache is a shared blast radius and prod does not trade
+# isolation for $15/mo.
+#
+# ── How two products share one node safely ────────────────────────────────────
+#
+# SEPARATE DATABASE INDEXES, not a key prefix. `num_cache_clusters = 1` in the cache
+# module means cluster mode is DISABLED (verified on the live node: ClusterEnabled =
+# false), so all 16 Valkey databases are available and SELECT works. Each product stack
+# passes its own index in the URL path — rally `/0`, qnsc-kb `/1`. A prefix convention
+# would have to be honoured by every library; a database index is enforced by the server.
+#
+# THE EVICTION ORDER IS LOAD-BEARING, because qnsc-kb runs CELERY on this node — broker
+# AND result backend. Evicting a broker key does not miss a cache, it LOSES A QUEUED TASK.
+#
+# The default parameter group (default.valkey7) sets `maxmemory-policy = volatile-lru`,
+# which evicts only keys that carry a TTL. Celery's broker keys have none, so they are
+# never eviction candidates; rally's rate-limit counters and token denylist entries all
+# have TTLs, so they are evicted first. That is the correct order, and it is a DEFAULT
+# rather than a decision — if anyone sets `allkeys-lru` on this node to make rally's
+# cache behave better under pressure, they will silently start dropping qnsc-kb's tasks.
+#
+# Headroom makes this theoretical today: 0.5 GiB against two dev workloads whose combined
+# working set is measured in megabytes. Watch `DatabaseMemoryUsagePercentage` if a third
+# product joins.
+#
+# COST: $15.45/mo, replacing $30.90.
+module "shared_cache" {
+  count = var.enable_shared_cache ? 1 : 0
+
+  # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag — matches
+  # every other module source in this layer, and the tags are what scripts/pin_drift.py in
+  # qnsc-ci compares across repos. A commit hash would satisfy the check and make the pin
+  # invisible to that report.
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cache?ref=cache-v1.0.0"
+
+  name              = "${local.name}-cache"
+  subnet_ids        = module.network.data_subnet_ids
+  security_group_id = module.network.sg_cache_id
+
+  # AWS-managed key rather than a CMK. The module keeps at-rest encryption and TLS in
+  # transit on either way — `kms_key_arn = ""` selects the AWS-managed ElastiCache key,
+  # which is free, where a customer-managed key is $1/mo. The product CMKs that the
+  # per-product caches used are per-product by construction and cannot encrypt a resource
+  # shared between them without granting each product's role access to the other's key.
+  kms_key_arn = ""
+
+  mode      = "node"
+  node_type = "cache.t4g.micro"
+
+  tags = { Environment = "develop" }
+}
