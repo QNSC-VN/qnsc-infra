@@ -1,3 +1,22 @@
+> [!CAUTION]
+> **RETIRED 2026-08-18. DO NOT APPLY.**
+>
+> The organization this stack managed was deleted so account 608983206583 could join
+> TrueIDC's organization to evaluate Kiro. An AWS account belongs to at most one
+> organization, so deleting this one was the only route in.
+>
+> IAM Identity Center went with it — it lives in an org's management account, and a member
+> account cannot enable it. `aws sso login` no longer works for this account. Human access
+> was rebuilt in `../security-baseline/human-access.tf`.
+>
+> Nothing operational broke: GitHub Actions uses the OIDC provider in `iam-oidc`, never
+> Identity Center, so every `*-github-*` role kept working.
+>
+> The state at `platform/organization/terraform.tfstate` is **orphaned** and left in place
+> deliberately. Do not `tofu destroy` here. This stack is kept as the route back to a
+> governed baseline if the account ever leaves the partner org — see the header of
+> `main.tf` for the revival sequence.
+
 # organization
 
 > AWS Organizations landing-zone root — the identity & governance foundation for

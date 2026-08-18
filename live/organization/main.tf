@@ -1,4 +1,46 @@
 # =============================================================================
+# organization — RETIRED 2026-08-18. DO NOT APPLY.
+#
+# THE ORGANIZATION THIS STACK MANAGES NO LONGER EXISTS. It was deleted on 2026-08-18 so
+# that account 608983206583 could join a partner's organization (TrueIDC) to evaluate Kiro.
+# An AWS account belongs to at most one organization, so deleting this one was the only
+# route in.
+#
+# WHAT THAT COST, recorded here because it is not obvious from the outside: IAM Identity
+# Center lives in an organization's MANAGEMENT account, so it went with the org. A MEMBER
+# account cannot enable Identity Center, so `aws sso login` is gone for this account and
+# cannot be restored while it belongs to someone else's org. Human access was rebuilt in
+# live/security-baseline/human-access.tf — an IAM user with no permissions that assumes a
+# role with MFA. Read that file's header before changing anything about access.
+#
+# WHAT DID NOT BREAK: nothing operational. GitHub Actions authenticates through the OIDC
+# provider in iam-oidc, never through Identity Center, so all thirteen `*-github-*` roles
+# kept working across the deletion — confirmed by a Terraform plan that ran and read S3
+# state afterwards.
+#
+# APPLYING THIS WOULD CREATE A NEW ORGANIZATION with 608983206583 as its management
+# account, which would FAIL while the account is a member of another org — and if it ever
+# succeeded it would silently undo the partner-billing arrangement. It is deliberately not
+# referenced by .github/workflows/infra-apply.yml, so CI cannot reach it. Keep it that way.
+#
+# THE REMOTE STATE AT platform/organization/terraform.tfstate IS ORPHANED. It still
+# describes the deleted organization, its OUs, its SCPs and its permission sets. It is left
+# in place rather than deleted because it is the only record of what that topology was, and
+# because deleting state is irreversible in a way that keeping it is not. Do not run
+# `tofu destroy` here: the resources are already gone and the run would only mislead.
+#
+# KEPT, NOT DELETED, on purpose. If the account ever leaves the partner org, this stack is
+# the fastest route back to a governed baseline: Organizations with feature set ALL, the
+# Security / Shared-Services / Workloads OUs, the baseline SCPs in scp.tf, and Identity
+# Center in identity-center.tf. Rebuilding that from memory would be a week's work and the
+# SCPs in particular encode decisions nobody would reconstruct correctly.
+#
+# TO REVIVE IT: leave the partner org, wait for the account to become standalone, delete
+# the orphaned state file, then apply from scratch. The `enable_identity_center` variable
+# is the switch that brings SSO back, and doing so should retire human-access.tf.
+#
+# ── Original header follows, describing the design as it was ─────────────────
+#
 # organization — AWS Organizations landing-zone root (management account).
 #
 # The identity & governance foundation for the whole platform. Adopt NOW at $0,
