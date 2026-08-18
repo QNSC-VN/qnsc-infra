@@ -104,7 +104,7 @@ data "aws_iam_policy_document" "human_self_service" {
     sid       = "AllowAssumeRolesWithMFA"
     effect    = "Allow"
     actions   = ["sts:AssumeRole"]
-    resources = [aws_iam_role.admin.arn, aws_iam_role.developer.arn]
+    resources = [aws_iam_role.admin.arn, aws_iam_role.developer.arn, aws_iam_role.prod_breakglass.arn]
     condition {
       test     = "Bool"
       variable = "aws:MultiFactorAuthPresent"
@@ -181,40 +181,53 @@ resource "aws_iam_role_policy_attachment" "developer_readonly" {
   policy_arn = "arn:${local.partition}:iam::aws:policy/ReadOnlyAccess"
 }
 
-# THE POINT OF THIS ROLE. `AWS-StartPortForwardingSessionToRemoteHost` on the NAT/bastion
-# instance is what lets a developer reach RDS and the cache from DBeaver without either
-# being publicly accessible, without an SSH key, and without an inbound port. Access is
-# decided by IAM rather than by the network, and every session is in CloudTrail — the two
-# properties an SSH bastion never had. The instance side was built in qnsc-infra#67
-# (nat_ssm_bastion); this is the human side, which was scoped as an Identity Center
-# permission set and never created.
+# THE POINT OF THIS ROLE. `AWS-StartPortForwardingSessionToRemoteHost` on a bastion is what
+# lets a developer reach RDS and the cache from DBeaver without either being publicly
+# accessible, without an SSH key, and without an inbound port. Access is decided by IAM
+# rather than by the network, and every session lands in CloudTrail — the two properties an
+# SSH bastion never had. The instance side was built in qnsc-infra#67 (nat_ssm_bastion).
 #
-# TWO STATEMENTS, and both are required — this is the shape AWS documents and it is easy to
-# get wrong. Granting the instance without the document lets a caller open an interactive
-# SHELL on the bastion; granting the document without the instance denies everything.
+# SCOPED BY THE `Environment` TAG, and that is a CORRECTION rather than a preference.
 #
-# DEVELOP ONLY, by construction rather than by intent: runtime-prod leaves
-# nat_ssm_bastion unset, so no production instance carries the SSM role and there is
-# nothing here to target. Reaching the production database this way is a deliberate change
-# to that stack, not a permission handed out here.
+# This policy first shipped scoped by name — `ssm:resourceTag/Name` LIKE `*-nat-instance`.
+# That pattern matches `qnsc-runtime-dev-nat-instance` AND
+# `qnsc-runtime-prod-nat-instance`. It was harmless for exactly as long as production had
+# no bastion, and #68 created one on 2026-08-18 for go-live. Verified with the policy
+# simulator against the live production instance: `ssm:StartSession` returned ALLOWED.
+# Nobody but the account owner held the role, so nothing was exposed — but the next
+# developer or contractor added to `human_users` would have received production database
+# access with no separate decision, no review, and nothing in the diff to show it.
+#
+# The `Environment` tag is the right discriminator because it is what actually
+# distinguishes the two instances (`develop` vs `production`, set by each runtime stack's
+# `tags`), and because it does not silently widen when a NAME changes. A future
+# `qnsc-runtime-staging-nat-instance` is denied by default here rather than granted.
+#
+# BOTH CONDITIONS ARE REQUIRED, deliberately. The Environment tag decides WHICH instance and
+# the document check decides WHAT KIND OF SESSION. Drop the second and this role can open an
+# interactive SHELL on the bastion; drop the first and it reaches production.
+#
+# PRODUCTION IS A DIFFERENT ROLE, not a wider condition here — see qnsc-prod-breakglass
+# below. Reaching real user data is a decision about a smaller group of people, and it
+# should look like one in the code.
 data "aws_iam_policy_document" "developer_ssm" {
   statement {
-    sid       = "StartSessionOnBastionInstancesOnly"
+    sid       = "StartSessionOnDevelopBastionOnly"
     effect    = "Allow"
     actions   = ["ssm:StartSession"]
     resources = ["arn:${local.partition}:ec2:${data.aws_region.current.name}:${local.account_id}:instance/*"]
 
-    # The bastion is the fck-nat instance, named `<stack>-nat-instance` by the network
-    # module. Tag-scoped rather than pinned to an instance id: the instance is replaced by
-    # an apply or an AMI refresh and a hardcoded id would silently stop working.
+    # DEVELOP ONLY. Tag-scoped rather than pinned to an instance id, because the instance is
+    # replaced by an apply or an AMI refresh and a hardcoded id would silently stop working
+    # — but scoped by ENVIRONMENT, not by name, for the reason in the note above.
     condition {
-      test     = "StringLike"
-      variable = "ssm:resourceTag/Name"
-      values   = ["*-nat-instance"]
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Environment"
+      values   = ["develop"]
     }
 
-    # Refuses any document not granted below — this is what keeps it port-forwarding
-    # rather than a shell.
+    # Refuses any document not granted below — this is what keeps it port-forwarding rather
+    # than a shell.
     condition {
       test     = "BoolIfExists"
       variable = "ssm:SessionDocumentAccessCheck"
@@ -232,8 +245,8 @@ data "aws_iam_policy_document" "developer_ssm" {
     ]
   }
 
-  # Ending and reconnecting to your OWN session only. Without the condition a developer
-  # could terminate somebody else's.
+  # Ending and reconnecting to your OWN session only. Without the condition a developer could
+  # terminate somebody else's.
   statement {
     sid       = "ManageOwnSessions"
     effect    = "Allow"
@@ -246,4 +259,124 @@ resource "aws_iam_role_policy" "developer_ssm" {
   name   = "ssm-port-forward-to-bastion"
   role   = aws_iam_role.developer.id
   policy = data.aws_iam_policy_document.developer_ssm.json
+}
+
+# ── Production data access: a separate role, a smaller group ─────────────────
+# WHY THIS EXISTS AT ALL. Before it, there was NO path to the production database. Not a
+# restricted one — none. RDS is not publicly accessible, ECS Exec is off, and until #68
+# production had no bastion. That reads as safe and is actually the more dangerous state:
+# the first time a user reports corrupted data, somebody under pressure reaches for
+# `--publicly-accessible` or an over-broad security group rule, at 2am, with no audit trail.
+# A designed door beats an improvised one.
+#
+# WHY IT IS NOT qnsc-developer. That role is held by developers and contractors, and it is
+# the role a partner gets in order to use DBeaver against DEVELOP. Production holds real
+# user data, so the group that may read it is smaller than the group that writes the code.
+# Separating them means adding a contractor can never be the same act as granting them
+# production access — the diff shows which list they went into.
+#
+# INERT UNTIL PRODUCTION HAS A BASTION. runtime-prod carries the NAT instance (#68, needed
+# for egress at go-live) but `nat_ssm_bastion` is unset there, so no production instance has
+# the SSM agent role and this policy has nothing to target. That is deliberate sequencing:
+# the role is reviewed and merged first, and turning the door on is then a one-line, visible
+# decision in qnsc-infra rather than something bundled with an IAM change.
+#
+# WHAT IT DOES NOT GRANT, and this is the part worth keeping: no shell (port-forwarding
+# documents only, same as develop), and no secrets — `secretsmanager:GetSecretValue` is
+# implicitly denied, verified with the policy simulator. So this role gets a NETWORK PATH to
+# the database and nothing else. Somebody still has to hand over a credential out of band,
+# which keeps "can reach it" and "can log in" two independent decisions, each revocable
+# alone. Hand over a least-privilege role's password, never the RDS master.
+#
+# ONE-HOUR SESSIONS, which is AWS's FLOOR rather than a choice — `max_session_duration`
+# rejects anything under 3600s, so a shorter break-glass window cannot be expressed here.
+# Thirty minutes was the intent. If that matters, enforce it outside IAM: a session-duration
+# alarm on CloudTrail, or simply terminating the port-forward when the query is done.
+variable "breakglass_users" {
+  type        = list(string)
+  default     = ["qnsc-base"]
+  description = <<-EOT
+    Which of the `human_users` may reach the PRODUCTION database.
+
+    Deliberately a separate list. Adding a developer or a contractor to `human_users` gives
+    them develop; putting them here is a second, visible decision about real user data.
+
+    Keep this as short as it can be — ideally the people who would be woken for an
+    incident, and nobody else.
+  EOT
+}
+
+data "aws_iam_policy_document" "assume_breakglass" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        for u in var.breakglass_users : "arn:${local.partition}:iam::${local.account_id}:user/${u}"
+      ]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+resource "aws_iam_role" "prod_breakglass" {
+  name                 = "qnsc-prod-breakglass"
+  description          = "Port-forward to the PRODUCTION bastion for incident diagnosis. No shell, no secrets, 1-hour sessions (AWS floor)."
+  assume_role_policy   = data.aws_iam_policy_document.assume_breakglass.json
+  max_session_duration = 3600
+  tags                 = { ManagedBy = "opentofu", Purpose = "production-data-breakglass" }
+}
+
+# No ReadOnlyAccess here. qnsc-developer carries it because a developer needs to look around
+# an environment; this role exists for one task, so it gets one permission. Anyone who needs
+# to read production configuration already has qnsc-admin.
+data "aws_iam_policy_document" "prod_breakglass_ssm" {
+  statement {
+    sid       = "StartSessionOnProductionBastionOnly"
+    effect    = "Allow"
+    actions   = ["ssm:StartSession"]
+    resources = ["arn:${local.partition}:ec2:${data.aws_region.current.name}:${local.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ssm:resourceTag/Environment"
+      values   = ["production"]
+    }
+
+    condition {
+      test     = "BoolIfExists"
+      variable = "ssm:SessionDocumentAccessCheck"
+      values   = ["true"]
+    }
+  }
+
+  statement {
+    sid     = "PortForwardingDocumentsOnly"
+    effect  = "Allow"
+    actions = ["ssm:StartSession"]
+    resources = [
+      "arn:${local.partition}:ssm:${data.aws_region.current.name}::document/AWS-StartPortForwardingSessionToRemoteHost",
+      "arn:${local.partition}:ssm:${data.aws_region.current.name}::document/AWS-StartPortForwardingSession",
+    ]
+  }
+
+  statement {
+    sid       = "ManageOwnSessions"
+    effect    = "Allow"
+    actions   = ["ssm:TerminateSession", "ssm:ResumeSession"]
+    resources = ["arn:${local.partition}:ssm:*:*:session/&{aws:username}-*"]
+  }
+}
+
+resource "aws_iam_role_policy" "prod_breakglass_ssm" {
+  name   = "ssm-port-forward-to-production-bastion"
+  role   = aws_iam_role.prod_breakglass.id
+  policy = data.aws_iam_policy_document.prod_breakglass_ssm.json
 }
