@@ -40,3 +40,21 @@ variable "enable_config" {
     itself keeps running. This turns off configuration-state recording only.
   EOT
 }
+
+variable "human_users" {
+  type        = list(string)
+  default     = ["qnsc-base"]
+  description = <<-EOT
+    IAM users created for humans, each holding NO permissions — only self-service MFA and
+    the right to assume qnsc-admin or qnsc-developer WITH MFA.
+
+    One entry per person, not one shared account: CloudTrail attributes every role
+    assumption to a user, and a shared login destroys that. Removing someone is deleting
+    their entry here.
+
+    See human-access.tf for why this exists at all — Identity Center went with the
+    organization on 2026-08-18 and a member account cannot enable it — and for the honest
+    limitation: there is no central directory here, so past a handful of people this should
+    be replaced by federating the existing Entra tenant to IAM.
+  EOT
+}
