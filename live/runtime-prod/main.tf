@@ -68,7 +68,7 @@ locals {
 
 # ── Shared VPC + NAT ──────────────────────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.2.0"
+  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.3.1"
 
   name   = local.name
   region = local.region
@@ -153,6 +153,44 @@ module "network" {
   # the RDS Multi-AZ decision — the same question asked at two layers — and note the fix
   # is then a NAT GATEWAY per AZ (nat_type = "gateway", multi_az_nat = true, ~$99/mo),
   # since the module offers no multi-instance mode.
+  # ── SSM bastion on the NAT instance ─────────────────────────────────────────
+  # Turns the NAT box into a jump host for `aws ssm start-session --document-name
+  # AWS-StartPortForwardingSessionToRemoteHost`, so an operator can reach the production RDS
+  # and cache from a laptop with the databases staying private — no public endpoint, no SSH
+  # key, no inbound port. Access is decided by IAM and every session is in CloudTrail.
+  #
+  # WHY PRODUCTION GETS THIS AT ALL, since it was deliberately left off until now. Before it
+  # there was NO path to the production database: RDS is not publicly accessible, ECS Exec is
+  # disabled, and nothing else reaches the data subnets. That reads as the safe choice and is
+  # actually the more dangerous one — the first time a user reports corrupted data, somebody
+  # under pressure reaches for `--publicly-accessible` or a temporary security-group rule, at
+  # 2am, with no audit trail and no reliable memory of undoing it. A designed door beats an
+  # improvised one, and the cheapest time to build it is before the incident.
+  #
+  # IT COSTS NOTHING. The NAT instance already exists and already runs (it is what gives
+  # production egress at all — see nat_type above). This adds an IAM role, an instance
+  # profile and two security-group ingress rules. No new billable resource.
+  #
+  # WHO CAN USE IT IS NOT DECIDED HERE, and that separation is the point. This flag builds
+  # the door; `qnsc-prod-breakglass` in live/security-baseline/human-access.tf decides who
+  # may open it, and its principals come from a `breakglass_users` list that is deliberately
+  # separate from `human_users`. So adding a developer or a contractor can never be the same
+  # act as granting them production data access.
+  #
+  # WHAT IT STILL DOES NOT GRANT, all three verified with the policy simulator against the
+  # live roles: no interactive shell (port-forwarding documents only), no ReadOnlyAccess, and
+  # `secretsmanager:GetSecretValue` denied. So it is a NETWORK PATH and nothing more —
+  # somebody must hand over a database credential out of band, which keeps "can reach it" and
+  # "can log in" two independent decisions, each revocable alone. Hand over a least-privilege
+  # role's password (rally_app), never the RDS master.
+  #
+  # THE DEVELOP ROLE CANNOT REACH THIS. qnsc-developer is scoped to
+  # `ssm:resourceTag/Environment = develop`, and this instance is tagged `production`. That
+  # scoping was a fix, not a design: the original policy matched on the NAME pattern
+  # `*-nat-instance`, which matched this instance too, and the simulator returned ALLOWED
+  # against it. Fixed in #76 before anyone was onboarded.
+  nat_ssm_bastion = true
+
   multi_az_nat            = false
   app_port                = 3000
   enable_flow_logs        = false
