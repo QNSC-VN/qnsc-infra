@@ -47,6 +47,15 @@
 # ── The identity: one user per human, no permissions ─────────────────────────
 # `force_destroy` so removing a leaver does not fail on their attached MFA device or keys.
 resource "aws_iam_user" "human" {
+  # checkov:skip=CKV_AWS_273: "Ensure access is controlled through SSO and not AWS IAM
+  # defined users" — correct as a rule, and it is the rule this account followed until
+  # 2026-08-18. It is not satisfiable here: Identity Center requires being an Organizations
+  # MANAGEMENT account, and this account is now a MEMBER of a partner's org, so `aws sso
+  # login` cannot exist. The header of this file has the full reasoning and the exit path
+  # (federate the existing Entra tenant as a SAML provider). The mitigations that make this
+  # tolerable are real, not paper: these users hold ZERO permissions, every privileged
+  # action requires aws:MultiFactorAuthPresent, sessions last one hour, and CloudTrail
+  # attributes each assumption. Re-evaluate this skip the day the account leaves that org.
   for_each = toset(var.human_users)
 
   name          = each.key
@@ -104,12 +113,25 @@ data "aws_iam_policy_document" "human_self_service" {
   }
 }
 
-resource "aws_iam_user_policy" "human_self_service" {
+# Attached to a GROUP rather than to each user. Checkov's CKV_AWS_40 asks for this and it
+# is right: one policy to review instead of one per person, and no way for two users to
+# drift apart in what they may do. `&{aws:username}` still resolves per CALLER inside a
+# group policy, so the self-service statements stay scoped to each person's own device.
+resource "aws_iam_group" "humans" {
+  name = "qnsc-humans"
+}
+
+resource "aws_iam_group_policy" "human_self_service" {
+  name   = "self-service-and-assume-roles"
+  group  = aws_iam_group.humans.name
+  policy = data.aws_iam_policy_document.human_self_service.json
+}
+
+resource "aws_iam_user_group_membership" "humans" {
   for_each = aws_iam_user.human
 
-  name   = "self-service-and-assume-roles"
   user   = each.value.name
-  policy = data.aws_iam_policy_document.human_self_service.json
+  groups = [aws_iam_group.humans.name]
 }
 
 # ── Trust: only these users, only with MFA, one-hour sessions ───────────────
