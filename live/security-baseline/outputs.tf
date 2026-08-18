@@ -22,3 +22,13 @@ output "access_analyzer_arn" {
   value       = aws_accessanalyzer_analyzer.account.arn
   description = "Account IAM Access Analyzer ARN."
 }
+
+output "human_admin_role_arn" {
+  value       = aws_iam_role.admin.arn
+  description = "Assume with MFA for admin. Use as `role_arn` in ~/.aws/config."
+}
+
+output "human_developer_role_arn" {
+  value       = aws_iam_role.developer.arn
+  description = "Assume with MFA for read-only + SSM port-forwarding to the develop bastion."
+}
