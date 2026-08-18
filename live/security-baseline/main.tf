@@ -206,6 +206,43 @@ resource "aws_guardduty_detector" "this" {
   }
 }
 
+# RDS Protection — OFF, and this is a cost decision taken with the exposure in view.
+#
+# GuardDuty enabled RDS_LOGIN_EVENTS automatically and ran it on the 30-day free trial.
+# The trial expired 2026-08-12: `APS1-FreeRDSvCPUMonitored` went to $0 and
+# `APS1-PaidRDSvCPUMonitored` began billing the same day, reaching $2.28/mo within a week
+# and still climbing — it bills per vCPU MONITORED, so it grows again when rally
+# production runs its database 24/7 rather than idled. Left alone it is roughly $5/mo,
+# and it was 82% of GuardDuty's entire bill.
+#
+# WHAT IT DETECTS: anomalous login behaviour against RDS — brute force, logins from
+# unusual principals or geographies.
+#
+# WHY THE EXPOSURE IS SMALL HERE, stated so this can be re-argued rather than re-guessed:
+#   - No RDS instance is publicly accessible. All three sit in data subnets with no
+#     internet route, reachable only from the app security group and the SSM bastion.
+#   - Credentials are per-role and least-privilege (db_least_privilege in the product
+#     stacks): api and worker connect as rally_app / rally_worker, neither of which can
+#     DROP a schema. The master credential belongs to the migrator alone.
+#   - CloudTrail still records every API-level action against RDS, and that is what an
+#     audit asks for. This feature is network/behavioural detection on top.
+#
+# WHAT IS NOT AFFECTED: the rest of GuardDuty stays on — CloudTrail, DNS, VPC flow logs,
+# S3 data events and EBS malware protection are all still enabled above and cost $0.50/mo
+# between them.
+#
+# TURN IT BACK ON IF: an RDS instance is ever made publicly accessible, the bastion is
+# opened beyond the current IAM-gated SSM path, or a compliance obligation names
+# database-login monitoring specifically. It is one line and takes effect immediately.
+#
+# Declared explicitly rather than switched off in the console, so the console cannot
+# quietly re-enable it and so the reason travels with the setting.
+resource "aws_guardduty_detector_feature" "rds_login_events" {
+  detector_id = aws_guardduty_detector.this.id
+  name        = "RDS_LOGIN_EVENTS"
+  status      = "DISABLED"
+}
+
 # ── IAM Access Analyzer — external-access findings ───────────────────────────
 resource "aws_accessanalyzer_analyzer" "account" {
   analyzer_name = "qnsc-account-analyzer"
