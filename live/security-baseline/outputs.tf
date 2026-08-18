@@ -32,3 +32,8 @@ output "human_developer_role_arn" {
   value       = aws_iam_role.developer.arn
   description = "Assume with MFA for read-only + SSM port-forwarding to the develop bastion."
 }
+
+output "prod_breakglass_role_arn" {
+  value       = aws_iam_role.prod_breakglass.arn
+  description = "Production bastion port-forwarding for incident diagnosis. Inert until runtime-prod sets nat_ssm_bastion = true."
+}
