@@ -10,7 +10,7 @@
 # Each stack runs under a GitHub Environment that doubles as the OIDC trust
 # boundary AND the reviewer gate, mapped to the three tiers the infra-apply
 # role trusts (see qnsc-tf-modules/modules/iam-oidc infra_apply_subjects):
-#   • shared     → bootstrap, security-baseline, edge (account/platform-wide)
+#   • shared     → bootstrap, security-baseline, edge, observability (account/platform-wide)
 #   • develop    → runtime-dev, storage-dev
 #   • production → runtime-prod, storage-prod (protect with required reviewers)
 #
@@ -79,7 +79,7 @@ jobs:
           AFTER: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge","storage-dev","storage-prod"'
+          ALL='"bootstrap","security-baseline","runtime-dev","runtime-prod","edge","storage-dev","storage-prod","observability"'
           # Manual dispatch or an unknown/zero base commit → apply everything.
           if [ -z "${BEFORE:-}" ] || [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
             echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
@@ -90,7 +90,7 @@ jobs:
             echo "stacks=[$ALL]" >> "$GITHUB_OUTPUT"; exit 0
           fi
           SEL=""
-          for s in bootstrap security-baseline runtime-dev runtime-prod edge storage-dev storage-prod; do
+          for s in bootstrap security-baseline runtime-dev runtime-prod edge storage-dev storage-prod observability; do
             if echo "$CHANGED" | grep -qE "^live/$s/"; then SEL="$SEL\"$s\","; fi
           done
           echo "stacks=[${SEL%,}]" >> "$GITHUB_OUTPUT"
@@ -275,6 +275,55 @@ jobs:
       - name: tofu apply
         if: steps.plan.outputs.exitcode == '2'
         working-directory: live/runtime-dev
+        run: tofu apply -input=false tfplan
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Shared observability — one Grafana Cloud stack + Alloy collector for
+  # every product's dev AND prod telemetry. Needs runtime-dev for its VPC/
+  # subnets and ALB ARN; does NOT need runtime-prod to have applied THIS run
+  # — its ALB ARN is filtered for null in live/observability/main.tf, so a
+  # not-yet-applied prod stack degrades to "no ALB metrics yet", not a
+  # failed apply. Platform blast radius, same reviewer gate as bootstrap/edge.
+  # ───────────────────────────────────────────────────────────────────────
+  apply-observability:
+    name: Apply observability
+    needs: [detect, apply-bootstrap, apply-runtime-dev]
+    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'observability') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-runtime-dev.result != 'failure' && needs.apply-runtime-dev.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: shared   # platform blast radius — gate with required reviewers
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.9.0
+        with:
+          role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-apply
+          aws-region:   ${{ env.AWS_REGION }}
+          tofu-version: ${{ env.TOFU_VERSION }}
+
+      - name: tofu init
+        working-directory: live/observability
+        run: tofu init -input=false
+
+      - name: tofu plan
+        id: plan
+        working-directory: live/observability
+        run: |
+          set +e
+          tofu plan -input=false -detailed-exitcode -out tfplan -no-color 2>&1 | tee plan.txt
+          ec=${PIPESTATUS[0]}   # tofu's real exit, independent of the tee pipe
+          echo "tofu plan detailed exit code: $ec (0=no change, 2=changes, 1=error)"
+          echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
+          if [ "$ec" = "1" ]; then exit 1; fi
+        env:
+          TF_VAR_cloudflare_api_token:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_grafana_cloud_api_key: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+
+      - name: tofu apply
+        if: steps.plan.outputs.exitcode == '2'
+        working-directory: live/observability
         run: tofu apply -input=false tfplan
 
   apply-runtime-prod:

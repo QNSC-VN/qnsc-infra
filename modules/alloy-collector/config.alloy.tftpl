@@ -1,0 +1,167 @@
+// =============================================================================
+// Shared Alloy collector — every product, every environment, one pipeline.
+//
+// Ingress: OTLP/HTTP on :4318, reached only through the Cloudflare Tunnel
+// sidecar (see main.tf). Auth is enforced at Cloudflare Access, not here —
+// this receiver trusts anything the tunnel forwards.
+//
+// Credentials come in as env vars from one Secrets Manager JSON secret,
+// extracted per-key by ECS itself (see the task definition's `secrets`
+// block) — nothing here parses JSON.
+// =============================================================================
+
+otelcol.receiver.otlp "in" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.tail_sampling.default.input]
+  }
+}
+
+// Tail sampling decides AFTER a trace completes, so errors and slow requests
+// are never at the mercy of a flat percentage. See the reference design doc
+// for why policy order matters — targeted policies first, catch-all last.
+otelcol.processor.tail_sampling "default" {
+  decision_wait                = "10s"
+  num_traces                   = 50000
+  expected_new_traces_per_sec  = 200
+
+  policy {
+    name = "errors"
+    type = "status_code"
+    status_code {
+      status_codes = ["ERROR"]
+    }
+  }
+  policy {
+    name = "slow"
+    type = "latency"
+    latency {
+      threshold_ms = 1000
+    }
+  }
+  policy {
+    name = "baseline"
+    type = "probabilistic"
+    probabilistic {
+      sampling_percentage = 10
+    }
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.prometheus.mimir.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// ── Metrics → Mimir ──────────────────────────────────────────────────────────
+otelcol.exporter.prometheus "mimir" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = sys.env("PROM_URL")
+    basic_auth {
+      username = sys.env("PROM_USER")
+      password = sys.env("PUSH_TOKEN")
+    }
+    // Bounded — a slow or unreachable backend gives up instead of retrying
+    // forever, which is what keeps a delivery hiccup from becoming a
+    // duplicate-ingest bill. See the design doc's idempotency section.
+    queue_config {
+      max_backoff = "30s"
+    }
+  }
+}
+
+// ── Logs → Loki ──────────────────────────────────────────────────────────────
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.grafana.receiver]
+}
+
+loki.write "grafana" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+    basic_auth {
+      username = sys.env("LOKI_USER")
+      password = sys.env("PUSH_TOKEN")
+    }
+  }
+}
+
+// ── Traces → Tempo ────────────────────────────────────────────────────────────
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = sys.env("TEMPO_URL")
+    auth     = otelcol.auth.basic.tempo.handler
+    retry_on_failure {
+      enabled          = true
+      initial_interval = "5s"
+      max_interval     = "30s"
+      max_elapsed_time = "60s"
+    }
+  }
+}
+
+otelcol.auth.basic "tempo" {
+  username = sys.env("TEMPO_USER")
+  password = sys.env("PUSH_TOKEN")
+}
+
+// ── CloudWatch bridge: ALB metrics into the same Mimir ──────────────────────
+// Infra-level signal (request count, target response time, 5xx count) folded
+// into the same metrics store as app-emitted OTel — one PromQL surface for
+// both, instead of ALB data staying siloed in the CloudWatch console. Reads
+// the ALB ARNs the bootstrap/runtime stacks already export; nothing here
+// creates or names them.
+//
+// VERIFY BEFORE FIRST APPLY: prometheus.exporter.cloudwatch's discovery block
+// syntax below is written from the component's general shape, not confirmed
+// against the exact Alloy v1.5.1 schema (ARN-scoped discovery vs tag search
+// may differ from what's written here). Check `alloy run --help` / the
+// component's reference docs against a real ALB ARN before trusting this
+// block in production — everything else in this file follows stable,
+// well-documented OTel Collector semantics and doesn't carry the same risk.
+%{ for label, arn in alb_arns ~}
+prometheus.exporter.cloudwatch "alb_${label}" {
+  discovery {
+    type              = "AWS/ApplicationELB"
+    regions           = ["ap-southeast-1"]
+    search_tags = {
+      "Layer" = "platform"
+    }
+  }
+  metric {
+    name       = "RequestCount"
+    statistics = ["Sum"]
+    period     = "1m"
+  }
+  metric {
+    name       = "TargetResponseTime"
+    statistics = ["Average", "p99"]
+    period     = "1m"
+  }
+  metric {
+    name       = "HTTPCode_Target_5XX_Count"
+    statistics = ["Sum"]
+    period     = "1m"
+  }
+}
+
+prometheus.scrape "alb_${label}" {
+  targets    = prometheus.exporter.cloudwatch.alb_${label}.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  job_name   = "alb-${label}"
+}
+%{ endfor ~}
