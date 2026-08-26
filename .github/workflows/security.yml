@@ -16,8 +16,9 @@
 # actions-security (zizmor) is added regardless of the app-vs-IaC split above:
 # it scans this repo's OWN .github/workflows/*.yml, which exist here like
 # anywhere else and are just as exploitable (template injection, artifact
-# poisoning) whether the repo ships Terraform or TypeScript. Non-blocking on
-# first rollout; flip `blocking: true` after triaging.
+# poisoning) whether the repo ships Terraform or TypeScript. Blocking, after
+# triaging the initial findings (persist-credentials, scoped OIDC permissions,
+# template-injection fixes across infra-apply.yml/infra-plan.yml).
 # =============================================================================
 name: Security · Scan
 
@@ -46,6 +47,8 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Checkov scan
         uses: bridgecrewio/checkov-action@59b9d7edfcad5b87fbe3f473a9a134a721ad03f8 # v12.3119.0
@@ -74,6 +77,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: QNSC-VN/qnsc-ci/actions/scan-secrets@v1.10.0
 
@@ -82,3 +86,5 @@ jobs:
       contents: read
       security-events: write
     uses: QNSC-VN/qnsc-ci/.github/workflows/actions-security.yml@v1
+    with:
+      blocking: true

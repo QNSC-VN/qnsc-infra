@@ -13,8 +13,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  id-token: write
 
 env:
   TOFU_VERSION: "1.9.1"
@@ -36,6 +34,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Compute stack matrix
         id: changes
@@ -61,8 +60,13 @@ jobs:
     name: tofu fmt check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.10.0
         with:
@@ -79,6 +83,12 @@ jobs:
     if: needs.detect.outputs.stacks != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Only this job needs the OIDC role assume (plan) and PR comment (post
+    # plan). detect/fmt stay at the workflow default (contents: read).
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     # NOTE: intentionally NO `environment:` here. The infra-plan role's OIDC
     # trust is scoped to pull_request / main subjects; adding an environment
     # would flip the token subject to `environment:<name>` and break AssumeRole
@@ -91,6 +101,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
 
       - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.10.0
         with:
@@ -126,10 +138,13 @@ jobs:
 
       - name: Post plan comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          STACK: ${{ matrix.stack }}
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('live/${{ matrix.stack }}/plan.txt', 'utf8');
+            const stack = process.env.STACK;
+            const plan = fs.readFileSync(`live/${stack}/plan.txt`, 'utf8');
             const truncated = plan.length > 60000
               ? plan.substring(0, 60000) + '\n\n... (truncated)'
               : plan;
@@ -137,7 +152,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### Infrastructure Plan — \`live/${{ matrix.stack }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
+              body: `### Infrastructure Plan — \`live/${stack}\`\n\`\`\`hcl\n${truncated}\n\`\`\``,
             });
 
       # -detailed-exitcode: 0=no change, 2=changes (both OK for a PR), 1=error.
