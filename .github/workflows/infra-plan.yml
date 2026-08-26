@@ -60,9 +60,6 @@ jobs:
     name: tofu fmt check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
@@ -83,15 +80,17 @@ jobs:
     if: needs.detect.outputs.stacks != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Only this job needs the OIDC role assume (plan) and PR comment (post
+    # plan). detect/fmt stay at the workflow default (contents: read).
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     # NOTE: intentionally NO `environment:` here. The infra-plan role's OIDC
     # trust is scoped to pull_request / main subjects; adding an environment
     # would flip the token subject to `environment:<name>` and break AssumeRole
     # once the current wildcard trust is tightened to the module defaults.
     # Plan is read-only, so no reviewer gate is needed anyway.
-    permissions:
-      contents: read
-      id-token: write
-      pull-requests: write # Post plan comment
     strategy:
       fail-fast: false
       matrix:
