@@ -16,8 +16,9 @@
 # actions-security (zizmor) is added regardless of the app-vs-IaC split above:
 # it scans this repo's OWN .github/workflows/*.yml, which exist here like
 # anywhere else and are just as exploitable (template injection, artifact
-# poisoning) whether the repo ships Terraform or TypeScript. Blocking — the
-# initial rollout ran clean, no findings.
+# poisoning) whether the repo ships Terraform or TypeScript. Blocking, after
+# triaging the initial findings (persist-credentials, scoped OIDC permissions,
+# template-injection fixes across infra-apply.yml/infra-plan.yml).
 # =============================================================================
 name: Security · Scan
 
