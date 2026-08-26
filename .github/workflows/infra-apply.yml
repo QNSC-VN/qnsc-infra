@@ -278,17 +278,17 @@ jobs:
         run: tofu apply -input=false tfplan
 
   # ───────────────────────────────────────────────────────────────────────
-  # Shared observability — one Grafana Cloud stack + Alloy collector for
-  # every product's dev AND prod telemetry. Needs runtime-dev for its VPC/
-  # subnets and ALB ARN; does NOT need runtime-prod to have applied THIS run
-  # — its ALB ARN is filtered for null in live/observability/main.tf, so a
-  # not-yet-applied prod stack degrades to "no ALB metrics yet", not a
-  # failed apply. Platform blast radius, same reviewer gate as bootstrap/edge.
+  # Shared observability — the one Grafana Cloud stack every product's
+  # already-wired OTel sidecar (qnsc-tf-modules/modules/observability-agent)
+  # pushes to. No VPC, no ALB, no other stack's remote state — this is a
+  # standalone Grafana Cloud resource, so it depends on nothing but the
+  # Grafana credential. Platform blast radius, same reviewer gate as
+  # bootstrap/edge.
   # ───────────────────────────────────────────────────────────────────────
   apply-observability:
     name: Apply observability
-    needs: [detect, apply-bootstrap, apply-runtime-dev]
-    if: ${{ always() && contains(fromJson(needs.detect.outputs.stacks), 'observability') && needs.apply-bootstrap.result != 'failure' && needs.apply-bootstrap.result != 'cancelled' && needs.apply-runtime-dev.result != 'failure' && needs.apply-runtime-dev.result != 'cancelled' }}
+    needs: [detect]
+    if: ${{ contains(fromJson(needs.detect.outputs.stacks), 'observability') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: shared   # platform blast radius — gate with required reviewers
@@ -317,8 +317,6 @@ jobs:
           echo "exitcode=$ec" >> "$GITHUB_OUTPUT"
           if [ "$ec" = "1" ]; then exit 1; fi
         env:
-          TF_VAR_cloudflare_api_token:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           TF_VAR_grafana_cloud_api_key: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
 
       - name: tofu apply
