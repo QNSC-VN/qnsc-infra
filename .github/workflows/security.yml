@@ -12,6 +12,12 @@
 #
 # Checkov is REPORT-ONLY for now (no baseline yet). Triage the first-run
 # findings, add a modules-style .checkov.baseline, then flip soft_fail: false.
+#
+# actions-security (zizmor) is added regardless of the app-vs-IaC split above:
+# it scans this repo's OWN .github/workflows/*.yml, which exist here like
+# anywhere else and are just as exploitable (template injection, artifact
+# poisoning) whether the repo ships Terraform or TypeScript. Non-blocking on
+# first rollout; flip `blocking: true` after triaging.
 # =============================================================================
 name: Security · Scan
 
@@ -70,3 +76,9 @@ jobs:
           fetch-depth: 0
 
       - uses: QNSC-VN/qnsc-ci/actions/scan-secrets@v1.10.0
+
+  actions-security:
+    permissions:
+      contents: read
+      security-events: write
+    uses: QNSC-VN/qnsc-ci/.github/workflows/actions-security.yml@v1
