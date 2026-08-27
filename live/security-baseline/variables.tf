@@ -43,7 +43,7 @@ variable "enable_config" {
 
 variable "human_users" {
   type        = list(string)
-  default     = ["qnsc-base"]
+  default     = ["qnsc-base", "sinhhpt"]
   description = <<-EOT
     IAM users created for humans, each holding NO permissions — only self-service MFA and
     the right to assume qnsc-admin or qnsc-developer WITH MFA.
