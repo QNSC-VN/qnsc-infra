@@ -54,10 +54,13 @@ variable "grafana_cloud_api_key" {
 resource "grafana_cloud_stack" "qnsc" {
   name = "qnsc"
   slug = "qnsc"
-  # Real value, confirmed from the actual stack's created state — "ap-southeast-0"
-  # was never valid; the API silently accepted it at create time and assigned this
-  # region instead of erroring, which is what caused the first apply's replace plan.
-  region_slug = "prod-ap-southeast-1"
+  # "ap-southeast-0" was never a valid region_slug: the API silently accepted it
+  # at create time and auto-assigned prod-ap-southeast-1 instead of erroring —
+  # the WRONG region, confirmed by the access-policy API refusing to attach to
+  # it ("Stack must be in region prod-ap-southeast-0"). This is the real,
+  # correct region; matching it forces a genuine destroy+recreate of the
+  # misplaced stack, safe here since it holds zero data.
+  region_slug = "prod-ap-southeast-0"
 }
 
 # Scoped write-only: this is what every product's sidecar authenticates
