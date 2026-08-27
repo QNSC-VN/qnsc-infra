@@ -52,9 +52,12 @@ variable "grafana_cloud_api_key" {
 # logs+traces+profiles / 14-day retention) — see the growth path in the
 # reference design doc for what changes, and what doesn't, past it.
 resource "grafana_cloud_stack" "qnsc" {
-  name        = "qnsc"
-  slug        = "qnsc"
-  region_slug = "ap-southeast-0" # nearest Grafana Cloud region to ap-southeast-1
+  name = "qnsc"
+  slug = "qnsc"
+  # Real value, confirmed from the actual stack's created state — "ap-southeast-0"
+  # was never valid; the API silently accepted it at create time and assigned this
+  # region instead of erroring, which is what caused the first apply's replace plan.
+  region_slug = "prod-ap-southeast-1"
 }
 
 # Scoped write-only: this is what every product's sidecar authenticates
