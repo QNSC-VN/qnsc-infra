@@ -61,7 +61,7 @@ resource "grafana_cloud_stack" "qnsc" {
 # with, so it carries no read/admin surface a leaked task credential could
 # use beyond ingest.
 resource "grafana_cloud_access_policy" "otlp_push" {
-  region       = "ap-southeast-0"
+  region       = "prod-ap-southeast-0" # access-policy API uses a different region-slug format than the stack's
   name         = "otlp-sidecar-push"
   display_name = "OTel sidecar push — write-only"
 
@@ -74,7 +74,7 @@ resource "grafana_cloud_access_policy" "otlp_push" {
 }
 
 resource "grafana_cloud_access_policy_token" "otlp_push" {
-  region           = "ap-southeast-0"
+  region           = "prod-ap-southeast-0"
   access_policy_id = grafana_cloud_access_policy.otlp_push.policy_id
   name             = "otlp-sidecar-push-token"
 }
