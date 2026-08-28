@@ -126,12 +126,37 @@ provider "grafana" {
   auth  = grafana_cloud_stack_service_account_token.alerting.key
 }
 
+# The basic "Editor" org role above does NOT include folder read/write —
+# real 403 hit on first apply: "GET /folders/{folder_uid}] 403 ...
+# Permissions needed: folders:read", on Terraform's own read-back right
+# after `grafana_folder.alerts` successfully CREATED. Grafana Cloud RBAC
+# decomposes basic roles into fixed roles, and Editor only bundles
+# `fixed:folders:creator` (create at root) plus Viewer's
+# `fixed:folders.general:reader` (read, but only the special General
+# folder) — neither covers reading an arbitrary folder by UID. `role =
+# "Admin"` above would also fix this (Admin includes `fixed:folders:admin`)
+# but is broader than needed; this explicit fixed-role grant is the
+# least-privilege fix, confirmed against Grafana's own RBAC fixed/basic
+# role definitions before writing it.
+resource "grafana_role_assignment" "alerting_folders" {
+  provider         = grafana.stack
+  role_uid         = "fixed:folders:writer"
+  service_accounts = [grafana_cloud_stack_service_account.alerting.id]
+}
+
 # One folder for every product's alert rules — matches the single-stack,
 # label-scoped-tenancy design everything else here follows. A per-product
 # folder would just be a filter UI already gives you via the `product` label.
 resource "grafana_folder" "alerts" {
   provider = grafana.stack
   title    = "Alerts"
+  # Explicit, not implicit through a reference: nothing in this block reads
+  # from grafana_role_assignment.alerting_folders, so Terraform's own
+  # dependency graph would otherwise happily create this folder (and
+  # immediately read it back) BEFORE the role granting that read exists —
+  # exactly the ordering that produced the real 403 this role assignment
+  # fixes.
+  depends_on = [grafana_role_assignment.alerting_folders]
 }
 
 # ONE contact point, ONE root notification policy — this org has one
