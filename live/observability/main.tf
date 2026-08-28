@@ -15,7 +15,8 @@
 #
 # THE ONE MANUAL STEP THIS STACK CANNOT DO ITSELF: Grafana Cloud organizations
 # are not provisioned via API. Sign up at grafana.com (free, no card), create
-# a Cloud Access Policy with scopes `stacks:read stacks:write`, and put its
+# a Cloud Access Policy with scopes `stacks:read stacks:write
+# stack-service-accounts:write`, and put its
 # token in this repo's GRAFANA_CLOUD_API_KEY secret. Everything past that —
 # the stack itself, and the push token every product's sidecar authenticates
 # with — this file provisions.
@@ -41,7 +42,7 @@ provider "grafana" {
 }
 
 variable "grafana_cloud_api_key" {
-  description = "Cloud Access Policy token (stacks:read, stacks:write) — the one credential created by hand. See header comment."
+  description = "Cloud Access Policy token (stacks:read, stacks:write, stack-service-accounts:write) — the one credential created by hand. See header comment."
   type        = string
   sensitive   = true
 }
@@ -95,11 +96,14 @@ resource "grafana_cloud_access_policy_token" "otlp_push" {
 # A SECOND, DIFFERENT credential from otlp_push above: the resources below
 # (contact point, notification policy, rule groups) live INSIDE the Grafana
 # instance itself and are managed through the Grafana HTTP API, not the
-# Grafana Cloud ORG API `cloud_access_policy_token` authenticates to. That
-# token's scopes (`stacks:read stacks:write`) manage the STACK as an object;
-# they cannot create an alert rule inside it. A stack-scoped SERVICE ACCOUNT
-# is the credential for that surface — same split Grafana's own docs draw
-# between "Cloud API" and "Grafana instance API".
+# Grafana Cloud ORG API `cloud_access_policy_token` authenticates to. Even
+# with `stack-service-accounts:write` added (real 403 hit on first apply —
+# `stacks:read stacks:write` alone does not cover creating a stack service
+# account, and that scope is what fixed it), the ORG token still cannot
+# create an ALERT RULE inside the stack; it can only create the service
+# account below, which is what CAN. A stack-scoped SERVICE ACCOUNT is the
+# credential for that surface — same split Grafana's own docs draw between
+# "Cloud API" and "Grafana instance API".
 resource "grafana_cloud_stack_service_account" "alerting" {
   stack_slug = grafana_cloud_stack.qnsc.slug
   name       = "terraform-alerting"
