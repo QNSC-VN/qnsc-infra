@@ -42,9 +42,20 @@ output "alerting_service_account_token" {
   sensitive   = true
 }
 
-output "alerting_prometheus_datasource_uid" {
-  value       = data.grafana_data_source.prometheus.uid
-  description = "var.grafana_alerting.prometheus_datasource_uid — the Mimir datasource every product's alert rules query against."
+output "alerting_prometheus_datasource_name" {
+  value       = "grafanacloud-${grafana_cloud_stack.qnsc.slug}-prom"
+  description = <<-EOT
+    var.grafana_alerting.prometheus_datasource_name — Grafana Cloud's
+    auto-provisioned Prometheus datasource name for this stack. A NAME, not
+    a UID: looking up the UID needs a real `data` read against the Grafana
+    instance API at PLAN time, which fails here on a fresh apply — the
+    service account token that read would authenticate with doesn't exist
+    yet in the SAME plan that creates it (data sources can't defer to apply
+    the way resources can). `observability-alerts` resolves the UID itself,
+    where its own provider config is always a plain, already-known CI
+    secret value by the time any product applies — no such bootstrap
+    ordering problem there.
+  EOT
 }
 
 output "alerting_folder_uid" {

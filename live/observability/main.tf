@@ -171,14 +171,6 @@ resource "grafana_notification_policy" "root" {
   repeat_interval = "12h"
 }
 
-# Every product's alert rules need this UID to query Mimir — looked up once,
-# here, rather than each product guessing Grafana Cloud's
-# `grafanacloud-<slug>-prom` auto-provisioning convention independently.
-data "grafana_data_source" "prometheus" {
-  provider = grafana.stack
-  name     = "grafanacloud-${grafana_cloud_stack.qnsc.slug}-prom"
-}
-
 variable "teams_webhook_url" {
   description = <<-EOT
     Microsoft Teams "Workflows" webhook URL (Teams' classic Incoming Webhook
