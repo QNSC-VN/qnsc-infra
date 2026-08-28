@@ -84,3 +84,101 @@ resource "grafana_cloud_access_policy_token" "otlp_push" {
   access_policy_id = grafana_cloud_access_policy.otlp_push.policy_id
   name             = "otlp-sidecar-push-token"
 }
+
+# =============================================================================
+# Alerting — Grafana Alerting ALONGSIDE CloudWatch Alarms, not replacing it.
+# CloudWatch Alarms stay on infra-level signals (ECS task health, ALB target
+# health); Grafana Alerting covers only what CloudWatch cannot see — the
+# application-level telemetry this stack ingests (DB pool pressure, HTTP
+# error rate, latency, in-process circuit breakers).
+#
+# A SECOND, DIFFERENT credential from otlp_push above: the resources below
+# (contact point, notification policy, rule groups) live INSIDE the Grafana
+# instance itself and are managed through the Grafana HTTP API, not the
+# Grafana Cloud ORG API `cloud_access_policy_token` authenticates to. That
+# token's scopes (`stacks:read stacks:write`) manage the STACK as an object;
+# they cannot create an alert rule inside it. A stack-scoped SERVICE ACCOUNT
+# is the credential for that surface — same split Grafana's own docs draw
+# between "Cloud API" and "Grafana instance API".
+resource "grafana_cloud_stack_service_account" "alerting" {
+  stack_slug = grafana_cloud_stack.qnsc.slug
+  name       = "terraform-alerting"
+  role       = "Editor" # Alert rule CRUD needs Editor; Viewer cannot write, Admin is unneeded surface
+}
+
+resource "grafana_cloud_stack_service_account_token" "alerting" {
+  stack_slug         = grafana_cloud_stack.qnsc.slug
+  service_account_id = grafana_cloud_stack_service_account.alerting.id
+  name               = "terraform-alerting-token"
+  # No expiration set deliberately: this token is Terraform's own long-lived
+  # management credential for the alerting surface, analogous to otlp_push's
+  # token never rotating on a timer. Rotate by tainting this resource if it
+  # ever needs to change, same as any other provider credential would.
+}
+
+provider "grafana" {
+  alias = "stack"
+  url   = grafana_cloud_stack.qnsc.url
+  auth  = grafana_cloud_stack_service_account_token.alerting.key
+}
+
+# One folder for every product's alert rules — matches the single-stack,
+# label-scoped-tenancy design everything else here follows. A per-product
+# folder would just be a filter UI already gives you via the `product` label.
+resource "grafana_folder" "alerts" {
+  provider = grafana.stack
+  title    = "Alerts"
+}
+
+# ONE contact point, ONE root notification policy — this org has one
+# on-call surface today (M365/Teams), so per-product routing would be
+# complexity with nothing to route TO. The `product` label every rule group
+# carries (see observability-alerts module) is what makes per-product
+# routing a one-line addition later — a `policy` block keyed on
+# `matcher { label = "product" ... }` — without touching any product's own
+# Terraform.
+#
+# Gated on teams_webhook_url being set, unlike everything else in this
+# "Alerting" section: Grafana's API genuinely REJECTS an empty `teams { url }`
+# — this isn't the harmless-default pattern otlp_endpoint uses (an unset
+# string there just means "no consumer configured yet"), it's a real
+# validation failure at apply time. `count`, not `for_each` — there is
+# exactly one of each, and count on a bool is simpler for a single
+# on/off resource than a for_each over a conditional set.
+locals {
+  alerting_enabled = var.teams_webhook_url != ""
+}
+
+resource "grafana_contact_point" "teams" {
+  count    = local.alerting_enabled ? 1 : 0
+  provider = grafana.stack
+  name     = "teams-alerts"
+
+  teams {
+    url = var.teams_webhook_url
+  }
+}
+
+resource "grafana_notification_policy" "root" {
+  count          = local.alerting_enabled ? 1 : 0
+  provider       = grafana.stack
+  contact_point  = grafana_contact_point.teams[0].name
+  group_by       = ["alertname", "product"]
+  group_wait     = "30s"
+  group_interval = "5m"
+  # Long repeat: a channel re-notified every default 4h for a still-firing
+  # alert is exactly the kind of noise that trains people to ignore it.
+  repeat_interval = "12h"
+}
+
+variable "teams_webhook_url" {
+  description = <<-EOT
+    Microsoft Teams "Workflows" webhook URL (Teams' classic Incoming Webhook
+    connectors were retired; this is a Logic Apps endpoint from a channel's
+    Workflows app — "Post to a channel when a webhook request is received").
+    Sensitive: treat like any other bearer credential embedded in a URL.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}

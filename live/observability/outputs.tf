@@ -23,3 +23,42 @@ output "otlp_push_token" {
   description = "Token half of the Basic auth pair. Sensitive — read via `tofu output -raw` when populating a product's observability-token secret, never logged."
   sensitive   = true
 }
+
+# Consumed by every product's infra for the `grafana` PROVIDER config that
+# manages alert rules — a different credential from otlp_push above (see
+# main.tf's "Alerting" header comment for why). Unlike the OTLP token, this
+# one is needed at TERRAFORM PLAN/APPLY time, not just app runtime, so it
+# reaches each product as a CI secret (e.g. `GRAFANA_ALERTS_TOKEN`), never
+# through AWS Secrets Manager — nothing in a running task ever needs it.
+
+output "alerting_grafana_url" {
+  value       = grafana_cloud_stack.qnsc.url
+  description = "var.grafana_alerting.url for every product's `grafana` provider block."
+}
+
+output "alerting_service_account_token" {
+  value       = grafana_cloud_stack_service_account_token.alerting.key
+  description = "Sensitive — read via `tofu output -raw` when populating a product's GRAFANA_ALERTS_TOKEN CI secret. Never write to AWS Secrets Manager: this credential has no reason to ever be reachable from inside a running ECS task."
+  sensitive   = true
+}
+
+output "alerting_prometheus_datasource_name" {
+  value       = "grafanacloud-${grafana_cloud_stack.qnsc.slug}-prom"
+  description = <<-EOT
+    var.grafana_alerting.prometheus_datasource_name — Grafana Cloud's
+    auto-provisioned Prometheus datasource name for this stack. A NAME, not
+    a UID: looking up the UID needs a real `data` read against the Grafana
+    instance API at PLAN time, which fails here on a fresh apply — the
+    service account token that read would authenticate with doesn't exist
+    yet in the SAME plan that creates it (data sources can't defer to apply
+    the way resources can). `observability-alerts` resolves the UID itself,
+    where its own provider config is always a plain, already-known CI
+    secret value by the time any product applies — no such bootstrap
+    ordering problem there.
+  EOT
+}
+
+output "alerting_folder_uid" {
+  value       = grafana_folder.alerts.uid
+  description = "var.grafana_alerting.folder_uid — the shared folder every product's rule groups live under."
+}
