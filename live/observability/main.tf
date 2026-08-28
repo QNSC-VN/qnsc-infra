@@ -137,7 +137,20 @@ resource "grafana_folder" "alerts" {
 # routing a one-line addition later — a `policy` block keyed on
 # `matcher { label = "product" ... }` — without touching any product's own
 # Terraform.
+#
+# Gated on teams_webhook_url being set, unlike everything else in this
+# "Alerting" section: Grafana's API genuinely REJECTS an empty `teams { url }`
+# — this isn't the harmless-default pattern otlp_endpoint uses (an unset
+# string there just means "no consumer configured yet"), it's a real
+# validation failure at apply time. `count`, not `for_each` — there is
+# exactly one of each, and count on a bool is simpler for a single
+# on/off resource than a for_each over a conditional set.
+locals {
+  alerting_enabled = var.teams_webhook_url != ""
+}
+
 resource "grafana_contact_point" "teams" {
+  count    = local.alerting_enabled ? 1 : 0
   provider = grafana.stack
   name     = "teams-alerts"
 
@@ -147,8 +160,9 @@ resource "grafana_contact_point" "teams" {
 }
 
 resource "grafana_notification_policy" "root" {
+  count          = local.alerting_enabled ? 1 : 0
   provider       = grafana.stack
-  contact_point  = grafana_contact_point.teams.name
+  contact_point  = grafana_contact_point.teams[0].name
   group_by       = ["alertname", "product"]
   group_wait     = "30s"
   group_interval = "5m"
