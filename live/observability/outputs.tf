@@ -62,3 +62,8 @@ output "alerting_folder_uid" {
   value       = grafana_folder.alerts.uid
   description = "var.grafana_alerting.folder_uid — the shared folder every product's rule groups live under."
 }
+
+output "dashboards_folder_uid" {
+  value       = grafana_folder.dashboards.uid
+  description = "The PARENT folder for every product's own dashboards. Each product creates its own SUBFOLDER under this one (Grafana's nested-folder support, `parent_folder_uid`) — unlike alerting_folder_uid, which stays flat: dashboards multiply per product (Overview, Runtime, business KPIs) in a way a rule group per product never does, so a subfolder scales where a title-distinguished flat folder would get crowded."
+}
