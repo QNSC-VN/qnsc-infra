@@ -149,8 +149,9 @@ resource "grafana_folder" "alerts" {
   title    = "Alerts"
 }
 
-# Shared home for every dashboard, same reasoning as the Alerts folder above:
-# one stack, tenancy via labels, not a folder-per-product.
+# PARENT folder — each product creates its own SUBFOLDER underneath (see
+# dashboards_folder_uid's own description for why this one is nested and
+# alerts is not).
 resource "grafana_folder" "dashboards" {
   provider = grafana.stack
   title    = "Dashboards"
