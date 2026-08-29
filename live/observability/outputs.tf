@@ -62,3 +62,8 @@ output "alerting_folder_uid" {
   value       = grafana_folder.alerts.uid
   description = "var.grafana_alerting.folder_uid — the shared folder every product's rule groups live under."
 }
+
+output "dashboards_folder_uid" {
+  value       = grafana_folder.dashboards.uid
+  description = "The shared folder every product's own dashboard lives in — same one-folder-per-concern pattern as alerting_folder_uid, distinguished by dashboard title (e.g. \"Rally\"), not a folder per product."
+}

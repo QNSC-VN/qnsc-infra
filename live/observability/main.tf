@@ -149,6 +149,109 @@ resource "grafana_folder" "alerts" {
   title    = "Alerts"
 }
 
+# Shared home for every dashboard, same reasoning as the Alerts folder above:
+# one stack, tenancy via labels, not a folder-per-product.
+resource "grafana_folder" "dashboards" {
+  provider = grafana.stack
+  title    = "Dashboards"
+}
+
+# Resolved directly, not via a dashboard template variable: a Grafana
+# dashboard template var of type "datasource" needs a populated `current`
+# value to render correctly on a PROVISIONED (Terraform-loaded) dashboard,
+# and that shape is exactly the kind of undocumented, easy-to-get-wrong
+# JSON this session already got burned by twice (alert rule models,
+# Fluent Bit config) — not worth the risk for zero benefit when there is
+# only one datasource. Safe to look up directly here, unlike the earlier
+# attempt in this same file: THAT one broke because the service account
+# token the read would authenticate with was being created in the SAME
+# plan (a data source can't defer to apply the way a resource can). The
+# token now already exists in state from prior applies, so this read is
+# no longer racing its own credential's creation.
+data "grafana_data_source" "prometheus" {
+  provider = grafana.stack
+  name     = "grafanacloud-${grafana_cloud_stack.qnsc.slug}-prom"
+}
+
+# ONE system-level dashboard, split by `service_namespace` (the product
+# label observability-agent already stamps on every signal) rather than
+# hardcoding a panel per product. Works today with only rally emitting
+# data — one line per graph — and needs no edit when opshub/qnsc-kb-backend
+# start pushing telemetry through the same stack: they show up as a second
+# legend series automatically. A per-product dashboard (rally's own, more
+# detailed) is a separate thing, owned by that product's own repo — see
+# rally/infra's dashboard for why this split, not one giant dashboard here.
+resource "grafana_dashboard" "system_overview" {
+  provider  = grafana.stack
+  folder    = grafana_folder.dashboards.uid
+  overwrite = true
+
+  config_json = jsonencode({
+    title         = "System Overview"
+    uid           = "system-overview"
+    timezone      = "browser"
+    editable      = false
+    schemaVersion = 39
+    time          = { from = "now-6h", to = "now" }
+    refresh       = "1m"
+    tags          = ["system", "provisioned"]
+
+    panels = [
+      {
+        id         = 1
+        title      = "HTTP request rate, by product"
+        type       = "timeseries"
+        gridPos    = { h = 8, w = 12, x = 0, y = 0 }
+        datasource = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
+        targets = [{
+          expr         = "sum(rate(http_server_requests_total[5m])) by (service_namespace)"
+          legendFormat = "{{service_namespace}}"
+          refId        = "A"
+        }]
+      },
+      {
+        id          = 2
+        title       = "HTTP error rate, by product"
+        type        = "timeseries"
+        gridPos     = { h = 8, w = 12, x = 12, y = 0 }
+        datasource  = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
+        fieldConfig = { defaults = { unit = "percentunit" } }
+        targets = [{
+          expr         = "sum(rate(http_server_errors_total[5m])) by (service_namespace) / sum(rate(http_server_requests_total[5m])) by (service_namespace)"
+          legendFormat = "{{service_namespace}}"
+          refId        = "A"
+        }]
+      },
+      {
+        id          = 3
+        title       = "HTTP p99 latency, by product"
+        type        = "timeseries"
+        gridPos     = { h = 8, w = 12, x = 0, y = 8 }
+        datasource  = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
+        fieldConfig = { defaults = { unit = "ms" } }
+        targets = [{
+          expr         = "histogram_quantile(0.99, sum(rate(http_server_duration_milliseconds_bucket[5m])) by (le, service_namespace))"
+          legendFormat = "{{service_namespace}}"
+          refId        = "A"
+        }]
+      },
+      {
+        id         = 4
+        title      = "Active Mimir series (this stack, all products)"
+        type       = "stat"
+        gridPos    = { h = 8, w = 12, x = 12, y = 8 }
+        datasource = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
+        # Free tier ceiling is 10k series — this is the one number that
+        # says "about to lose data silently" before it happens.
+        targets = [{
+          expr  = "count({__name__=~\".+\"})"
+          refId = "A"
+        }]
+      },
+    ]
+  })
+}
+
 # ONE contact point, ONE root notification policy — this org has one
 # on-call surface today (M365/Teams), so per-product routing would be
 # complexity with nothing to route TO. The `product` label every rule group
