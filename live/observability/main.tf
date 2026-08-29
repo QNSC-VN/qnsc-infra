@@ -283,10 +283,17 @@ resource "grafana_contact_point" "teams" {
 }
 
 resource "grafana_notification_policy" "root" {
-  count          = local.alerting_enabled ? 1 : 0
-  provider       = grafana.stack
-  contact_point  = grafana_contact_point.teams[0].name
-  group_by       = ["alertname", "product"]
+  count         = local.alerting_enabled ? 1 : 0
+  provider      = grafana.stack
+  contact_point = grafana_contact_point.teams[0].name
+  # "env" is REQUIRED here, not "product" alone — caught in a pre-prod
+  # audit, before it could bite: with only develop's alert rules active
+  # this was invisible, but the moment prod's rules activate, a develop
+  # "http-5xx-rate" firing and a prod "http-5xx-rate" firing would GROUP
+  # INTO ONE Teams notification (same alertname, same product), reading
+  # as one incident when it's two, in two different environments with two
+  # completely different urgencies.
+  group_by       = ["alertname", "product", "env"]
   group_wait     = "30s"
   group_interval = "5m"
   # Long repeat: a channel re-notified every default 4h for a still-firing
