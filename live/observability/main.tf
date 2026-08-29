@@ -198,41 +198,50 @@ resource "grafana_dashboard" "system_overview" {
     tags          = ["system", "provisioned"]
 
     panels = [
+      # By (service_namespace, deployment_environment_name), not
+      # service_namespace alone — a real gap caught before prod ever sent
+      # data: with only develop emitting, these three panels HAPPENED to
+      # look env-scoped, but the underlying query wasn't. The moment prod
+      # activates, its numbers would have blended into the SAME line as
+      # develop's (summed for rate/count, averaged into one ratio for
+      # error rate) instead of showing as a second, separate series —
+      # exactly the kind of silent merge a "which environment is actually
+      # unhealthy" dashboard exists to prevent.
       {
         id         = 1
-        title      = "HTTP request rate, by product"
+        title      = "HTTP request rate, by product + env"
         type       = "timeseries"
         gridPos    = { h = 8, w = 12, x = 0, y = 0 }
         datasource = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
         targets = [{
-          expr         = "sum(rate(http_server_requests_total[5m])) by (service_namespace)"
-          legendFormat = "{{service_namespace}}"
+          expr         = "sum(rate(http_server_requests_total[5m])) by (service_namespace, deployment_environment_name)"
+          legendFormat = "{{service_namespace}} ({{deployment_environment_name}})"
           refId        = "A"
         }]
       },
       {
         id          = 2
-        title       = "HTTP error rate, by product"
+        title       = "HTTP error rate, by product + env"
         type        = "timeseries"
         gridPos     = { h = 8, w = 12, x = 12, y = 0 }
         datasource  = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
         fieldConfig = { defaults = { unit = "percentunit" } }
         targets = [{
-          expr         = "sum(rate(http_server_errors_total[5m])) by (service_namespace) / sum(rate(http_server_requests_total[5m])) by (service_namespace)"
-          legendFormat = "{{service_namespace}}"
+          expr         = "sum(rate(http_server_errors_total[5m])) by (service_namespace, deployment_environment_name) / sum(rate(http_server_requests_total[5m])) by (service_namespace, deployment_environment_name)"
+          legendFormat = "{{service_namespace}} ({{deployment_environment_name}})"
           refId        = "A"
         }]
       },
       {
         id          = 3
-        title       = "HTTP p99 latency, by product"
+        title       = "HTTP p99 latency, by product + env"
         type        = "timeseries"
         gridPos     = { h = 8, w = 12, x = 0, y = 8 }
         datasource  = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
         fieldConfig = { defaults = { unit = "ms" } }
         targets = [{
-          expr         = "histogram_quantile(0.99, sum(rate(http_server_duration_milliseconds_bucket[5m])) by (le, service_namespace))"
-          legendFormat = "{{service_namespace}}"
+          expr         = "histogram_quantile(0.99, sum(rate(http_server_duration_milliseconds_bucket[5m])) by (le, service_namespace, deployment_environment_name))"
+          legendFormat = "{{service_namespace}} ({{deployment_environment_name}})"
           refId        = "A"
         }]
       },
