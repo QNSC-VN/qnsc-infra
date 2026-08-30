@@ -193,7 +193,7 @@ resource "cloudflare_record" "grafana" {
   content = "qnsc.grafana.net"
   ttl     = 300
   proxied = false
-  comment = "Grafana Cloud custom domain (qnsc-infra/edge) — see resource comment before setting grafana_cloud_stack.qnsc's url"
+  comment = "Grafana Cloud custom domain (qnsc-infra/edge)"
 }
 
 resource "cloudflare_record" "landing" {
