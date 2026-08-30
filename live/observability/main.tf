@@ -62,6 +62,29 @@ resource "grafana_cloud_stack" "qnsc" {
   # correct region; matching it forces a genuine destroy+recreate of the
   # misplaced stack, safe here since it holds zero data.
   region_slug = "prod-ap-southeast-0"
+
+  # Custom domain, deliberately set on an ALREADY-EXISTING stack. Grafana's
+  # own provider docs describe `url` as something that "must have a CNAME
+  # setup... before creating the stack" — a create-time attribute — so
+  # setting it here forces a full destroy+recreate of this ENTIRE resource,
+  # not an in-place rename. Accepted deliberately: this stack is pre-launch,
+  # every dashboard/alert/SLO/folder downstream of it is Terraform-managed
+  # and reproducible from code, and the alternative (never using a custom
+  # domain) was decided not worth it.
+  #
+  # CASCADES FURTHER than this file: the service account TOKEN
+  # (grafana_cloud_stack_service_account_token.alerting, below) depends on
+  # the recreated stack and gets a NEW value — `GRAFANA_ALERTS_TOKEN` (the
+  # GitHub org secret both rally and this repo's CI use) must be
+  # re-backfilled after this applies, same as the very first bootstrap.
+  # rally's own `grafana_alerting_url` variable default
+  # ("https://qnsc.grafana.net") also needs updating to match, in a
+  # follow-up change once this one is confirmed live.
+  #
+  # DNS must already resolve before this applies — qnsc-infra/live/edge's
+  # `cloudflare_record.grafana` (grafana.qnsc.vn -> qnsc.grafana.net,
+  # proxied) was applied and confirmed first.
+  url = "https://grafana.qnsc.vn"
 }
 
 # Scoped write-only: this is what every product's sidecar authenticates
