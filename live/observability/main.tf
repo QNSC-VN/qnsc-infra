@@ -149,12 +149,27 @@ resource "grafana_folder" "alerts" {
   title    = "Alerts"
 }
 
-# PARENT folder — each product creates its own SUBFOLDER underneath (see
+# PARENT folder — each product gets its own SUBFOLDER underneath (see
 # dashboards_folder_uid's own description for why this one is nested and
 # alerts is not).
 resource "grafana_folder" "dashboards" {
   provider = grafana.stack
   title    = "Dashboards"
+}
+
+# Rally's own subfolder — created HERE, ONCE, not inside rally's own stack
+# module. A real bug this shipped as: rally's develop and prod environments
+# are separate Terraform ROOT MODULES with separate state files, so each
+# one's `grafana_folder.product_dashboards` independently created its OWN
+# "Rally" folder the moment prod applied for the first time — two real,
+# separate folders with the same title, sitting as siblings, each holding
+# only that one environment's dashboards. Centralizing it here is the same
+# fix as `alerts_folder_uid`/`dashboards_folder_uid` already being resolved
+# once and passed DOWN as a plain UID input, not re-derived per environment.
+resource "grafana_folder" "rally_dashboards" {
+  provider          = grafana.stack
+  parent_folder_uid = grafana_folder.dashboards.uid
+  title             = "Rally"
 }
 
 # Resolved directly, not via a dashboard template variable: a Grafana
