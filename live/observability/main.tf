@@ -141,20 +141,42 @@ provider "grafana" {
   auth  = grafana_cloud_stack_service_account_token.alerting.key
 }
 
+# Top-level parent for everything THIS repo's Terraform manages — the visual
+# answer to "is this ours or Grafana Cloud's own stock content" (GrafanaCloud,
+# Alert Groups Insights, Incident Insights, etc. stay at true top-level
+# regardless; they're Grafana-managed and can never be re-parented under this).
+resource "grafana_folder" "company" {
+  provider = grafana.stack
+  title    = "QNSC"
+}
+
 # One folder for every product's alert rules — matches the single-stack,
 # label-scoped-tenancy design everything else here follows. A per-product
 # folder would just be a filter UI already gives you via the `product` label.
 resource "grafana_folder" "alerts" {
-  provider = grafana.stack
-  title    = "Alerts"
+  provider          = grafana.stack
+  parent_folder_uid = grafana_folder.company.uid
+  title             = "Alerts"
 }
 
 # PARENT folder — each product gets its own SUBFOLDER underneath (see
 # dashboards_folder_uid's own description for why this one is nested and
 # alerts is not).
 resource "grafana_folder" "dashboards" {
-  provider = grafana.stack
-  title    = "Dashboards"
+  provider          = grafana.stack
+  parent_folder_uid = grafana_folder.company.uid
+  title             = "Dashboards"
+}
+
+# Grafana's SLO app creates its own companion dashboard/folder per SLO by
+# default (wherever `grafana_slo.folder_uid` points, or its own default
+# location if unset). Giving every product's SLOs one shared home here, same
+# reasoning as Alerts staying flat: SLO COUNT per product is small, a
+# per-product subfolder would be premature.
+resource "grafana_folder" "slos" {
+  provider          = grafana.stack
+  parent_folder_uid = grafana_folder.company.uid
+  title             = "SLOs"
 }
 
 # Rally's own subfolder — created HERE, ONCE, not inside rally's own stack
