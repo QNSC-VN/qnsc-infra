@@ -73,6 +73,11 @@ output "rally_dashboards_folder_uid" {
   description = "Rally's dashboard subfolder — created ONCE here, not per-environment. See the resource's own comment for the real duplicate-folder bug this replaces."
 }
 
+output "opshub_dashboards_folder_uid" {
+  value       = grafana_folder.opshub_dashboards.uid
+  description = "Opshub's dashboard subfolder — created ONCE here, not per-environment. See rally_dashboards_folder_uid for the duplicate-folder bug this avoids from the start."
+}
+
 output "slos_folder_uid" {
   value       = grafana_folder.slos.uid
   description = "Shared SLOs folder, under the QNSC parent — pass to grafana_slo's folder_uid so a product's SLOs land here instead of Grafana's default SLO folder."
