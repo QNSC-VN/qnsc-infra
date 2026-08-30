@@ -194,6 +194,14 @@ resource "grafana_folder" "rally_dashboards" {
   title             = "Rally"
 }
 
+# opshub's own subfolder — same centralization as rally_dashboards above, done
+# up front this time instead of discovered via a duplicate-folder incident.
+resource "grafana_folder" "opshub_dashboards" {
+  provider          = grafana.stack
+  parent_folder_uid = grafana_folder.dashboards.uid
+  title             = "Opshub"
+}
+
 # Resolved directly, not via a dashboard template variable: a Grafana
 # dashboard template var of type "datasource" needs a populated `current`
 # value to render correctly on a PROVISIONED (Terraform-loaded) dashboard,
