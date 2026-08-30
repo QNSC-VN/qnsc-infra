@@ -167,40 +167,6 @@ resource "cloudflare_pages_domain" "landing" {
   domain       = each.value
 }
 
-# Grafana Cloud custom domain — grafana.qnsc.vn → qnsc.grafana.net.
-#
-# MUST be applied and PROPAGATED before the `url` attribute on
-# grafana_cloud_stack.qnsc (qnsc-infra/live/observability) is ever set —
-# Grafana's own docs are explicit that the CNAME must exist "before
-# creating the stack" for that field, and setting `url` on an ALREADY
-# EXISTING stack forces a full destroy+recreate of the entire stack
-# resource in the Terraform provider (confirmed via the resource's own
-# create-time-only wording, not tested empirically — the folder
-# `parent_folder_uid` incident earlier this session is exactly why this
-# is being checked instead of guessed). This record alone is harmless and
-# does nothing until that separate, much riskier change is made.
-#
-# PROXIED (`proxied = true`) — REVERSED from the first version of this
-# resource, by a real error, not preference. Unproxied hit Cloudflare's
-# own "Error 1000: DNS points to prohibited IP": qnsc.grafana.net's target
-# IP is ITSELF inside Cloudflare's network (Grafana Cloud's own edge is
-# also Cloudflare-fronted), and Cloudflare refuses to serve a DNS-only
-# record in a zone it manages when the target resolves back into its own
-# network — exactly the theoretical cert-validation conflict the original
-# comment worried about, except the OTHER direction: proxying is what
-# Cloudflare requires here, not what breaks Grafana's issuance. ttl is
-# irrelevant under proxy (Cloudflare controls it) but Terraform still
-# requires a value.
-resource "cloudflare_record" "grafana" {
-  zone_id = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
-  name    = "grafana"
-  type    = "CNAME"
-  content = "qnsc.grafana.net"
-  ttl     = 1
-  proxied = true
-  comment = "Grafana Cloud custom domain (qnsc-infra/edge)"
-}
-
 resource "cloudflare_record" "landing" {
   for_each = {
     (var.certificate_domain)          = var.certificate_domain # apex → CNAME-flattened
