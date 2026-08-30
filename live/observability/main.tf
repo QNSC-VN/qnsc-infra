@@ -263,8 +263,27 @@ resource "grafana_dashboard" "system_overview" {
         gridPos     = { h = 8, w = 12, x = 12, y = 0 }
         datasource  = { type = "prometheus", uid = data.grafana_data_source.prometheus.uid }
         fieldConfig = { defaults = { unit = "percentunit" } }
+        # Confirmed live: production's line silently disappeared from this
+        # panel's legend entirely (not "No data" text — just missing, easy to
+        # miss) the moment it had zero 5xx errors in the window, because a
+        # GROUPED numerator with one label combination entirely absent
+        # doesn't merge with `or vector(0)` the way a plain sum() does — a
+        # labelless vector(0) only fills in when the WHOLE result is empty,
+        # not one missing group. The fix re-derives the same
+        # (service_namespace, deployment_environment_name) label set from
+        # the request-rate metric (guaranteed present for any product+env
+        # that has ever served a request) zeroed out, so `or` has something
+        # with the RIGHT labels to fall back to per group.
         targets = [{
-          expr         = "sum(rate(http_server_errors_total[5m])) by (service_namespace, deployment_environment_name) / sum(rate(http_server_requests_total[5m])) by (service_namespace, deployment_environment_name)"
+          expr = join("", [
+            "(",
+            "sum(rate(http_server_errors_total[5m])) by (service_namespace, deployment_environment_name)",
+            " or ",
+            "sum(rate(http_server_requests_total[5m])) by (service_namespace, deployment_environment_name) * 0",
+            ")",
+            " / ",
+            "sum(rate(http_server_requests_total[5m])) by (service_namespace, deployment_environment_name)",
+          ])
           legendFormat = "{{service_namespace}} ({{deployment_environment_name}})"
           refId        = "A"
         }]
