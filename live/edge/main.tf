@@ -167,6 +167,35 @@ resource "cloudflare_pages_domain" "landing" {
   domain       = each.value
 }
 
+# Grafana Cloud custom domain — grafana.qnsc.vn → qnsc.grafana.net.
+#
+# MUST be applied and PROPAGATED before the `url` attribute on
+# grafana_cloud_stack.qnsc (qnsc-infra/live/observability) is ever set —
+# Grafana's own docs are explicit that the CNAME must exist "before
+# creating the stack" for that field, and setting `url` on an ALREADY
+# EXISTING stack forces a full destroy+recreate of the entire stack
+# resource in the Terraform provider (confirmed via the resource's own
+# create-time-only wording, not tested empirically — the folder
+# `parent_folder_uid` incident earlier this session is exactly why this
+# is being checked instead of guessed). This record alone is harmless and
+# does nothing until that separate, much riskier change is made.
+#
+# UNPROXIED (`proxied = false`), deliberately, unlike every other record
+# in this file: Grafana Cloud issues its OWN Let's Encrypt certificate for
+# the custom domain, which needs a directly-resolvable CNAME to validate
+# against — a Cloudflare-proxied (orange cloud) record would terminate TLS
+# at Cloudflare's edge with a DIFFERENT cert and hide the real origin from
+# Grafana's own issuance/validation process.
+resource "cloudflare_record" "grafana" {
+  zone_id = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
+  name    = "grafana"
+  type    = "CNAME"
+  content = "qnsc.grafana.net"
+  ttl     = 300
+  proxied = false
+  comment = "Grafana Cloud custom domain (qnsc-infra/edge) — see resource comment before setting grafana_cloud_stack.qnsc's url"
+}
+
 resource "cloudflare_record" "landing" {
   for_each = {
     (var.certificate_domain)          = var.certificate_domain # apex → CNAME-flattened
