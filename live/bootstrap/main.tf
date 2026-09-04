@@ -92,6 +92,7 @@ module "iam_oidc" {
   product           = "qnsc"
   oidc_provider_arn = module.oidc_provider.arn
 
+  github_org             = "quynhonsemiconductor"
   environments           = {}
   app_repo_names         = ["qnsc-infra"]
   infra_repo_name        = "qnsc-infra"
