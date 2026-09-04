@@ -14,7 +14,7 @@ skip the bootstrap ordering.
 - [ ] A workstation with **OpenTofu ≥ 1.9.1** and AWS CLI, authenticated to the
       target AWS account with admin (for bootstrap only).
 - [ ] Confirm the AWS account and region (`ap-southeast-1`) are correct.
-- [ ] Decide the GitHub org is `QNSC-VN` (default in all modules).
+- [ ] Decide the GitHub org is `quynhonsemiconductor` (default in all modules).
 
 ---
 
