@@ -1,4 +1,4 @@
-# qnsc-infra
+# infra
 
 > Platform-level AWS infrastructure shared across all QNSC products.
 
