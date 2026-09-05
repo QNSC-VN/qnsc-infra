@@ -59,7 +59,7 @@ data "terraform_remote_state" "bootstrap" {
 }
 
 module "edge" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cf-edge?ref=cf-edge-v1.0.0"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-edge?ref=cf-edge-v1.0.0"
 
   zone_id = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
 
@@ -293,7 +293,7 @@ resource "cloudflare_record" "landing" {
 # `TURNSTILE_SECRET` env var — never injected from Terraform, matching the
 # platform's secrets-out-of-band convention (see the module README).
 module "landing_turnstile" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/cloudflare-turnstile?ref=cloudflare-turnstile-v1.0.0"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cloudflare-turnstile?ref=cloudflare-turnstile-v1.0.0"
 
   account_id = var.cloudflare_account_id
   name       = "qnsc-landing"

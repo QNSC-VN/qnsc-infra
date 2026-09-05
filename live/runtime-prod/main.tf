@@ -68,7 +68,7 @@ locals {
 
 # ── Shared VPC + NAT ──────────────────────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/network?ref=network-v1.3.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/network?ref=network-v1.3.1"
 
   name   = local.name
   region = local.region
@@ -202,7 +202,7 @@ module "network" {
 
 # ── ALB access logs (S3) ──────────────────────────────────────────────────────
 module "alb_logs" {
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb-logs?ref=alb-logs-v1.0.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/alb-logs?ref=alb-logs-v1.0.1"
 
   bucket_name = "${local.name}-alb-logs"
   tags        = { Environment = "production" }
@@ -213,7 +213,7 @@ module "alb_logs" {
 # terraform_remote_state) — it covers every product API hostname on this ALB.
 #
 # ABSENT (var.enable_alb = false, 2026-08-02). rally's production api serves through a
-# Cloudflare Tunnel sidecar (QNSC-VN/rally#326), so it attaches no listener rule and no
+# Cloudflare Tunnel sidecar (quynhonsemiconductor/rally#326), so it attaches no listener rule and no
 # target group. Measured after that cutover: ZERO target groups and one default rule
 # forwarding nowhere — $18.40/mo plus $10.95 for three public IPv4, buying nothing.
 #
@@ -234,7 +234,7 @@ module "alb_logs" {
 module "alb" {
   count = var.enable_alb ? 1 : 0
 
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/alb?ref=alb-v1.0.1"
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
@@ -262,7 +262,7 @@ module "alb" {
 # COST_POSTURE_PLAN §10.
 module "waf" {
   count  = var.enable_aws_waf && var.enable_alb ? 1 : 0
-  source = "git::https://github.com/QNSC-VN/qnsc-tf-modules.git//modules/waf?ref=waf-v1.1.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/waf?ref=waf-v1.1.1"
 
   name                = local.name
   alb_arn             = module.alb[0].arn

@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.10.0
+      - uses: quynhonsemiconductor/ci/actions/setup-tofu-aws@v1
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
           aws-region:   ${{ env.AWS_REGION }}
@@ -104,11 +104,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: QNSC-VN/qnsc-ci/actions/setup-tofu-aws@v1.10.0
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        id: module-token
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          repositories: tf-modules
+
+      - uses: quynhonsemiconductor/ci/actions/setup-tofu-aws@v1
         with:
           role-arn:     arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/qnsc-github-infra-plan
           aws-region:   ${{ env.AWS_REGION }}
           tofu-version: ${{ env.TOFU_VERSION }}
+          git-token:    ${{ steps.module-token.outputs.token }}
 
       - name: tofu init
         working-directory: live/${{ matrix.stack }}
