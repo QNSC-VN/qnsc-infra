@@ -106,7 +106,7 @@ locals {
 
 # ── Shared VPC + fck-nat (egress only) ────────────────────────────────────────
 module "network" {
-  source = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/network?ref=network-v1.3.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/network?ref=network-v1.3.1"
 
   name   = local.name
   region = local.region
@@ -170,7 +170,7 @@ module "network" {
 module "alb" {
   count = var.enable_alb ? 1 : 0
 
-  source = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/alb?ref=alb-v1.0.1"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/alb?ref=alb-v1.0.1"
 
   name               = local.name
   security_group_ids = [module.network.sg_alb_id]
@@ -260,7 +260,7 @@ module "shared_cache" {
   # every other module source in this layer, and the tags are what scripts/pin_drift.py in
   # qnsc-ci compares across repos. A commit hash would satisfy the check and make the pin
   # invisible to that report.
-  source = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cache?ref=cache-v1.0.0"
+  source = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cache?ref=cache-v1.0.0"
 
   name              = "${local.name}-cache"
   subnet_ids        = module.network.data_subnet_ids

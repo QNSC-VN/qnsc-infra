@@ -50,7 +50,7 @@ data "terraform_remote_state" "bootstrap" {
 module "rally_attachments" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
-  source     = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "rally-prod-attachments" # same name as the S3 bucket it replaces
   location   = "apac"                   # co-locate with the ap-southeast-1 footprint
@@ -86,7 +86,7 @@ module "opshub_attachments" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
   # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
-  source     = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "opshub-prod-attachments" # replaces the opshub-prod S3 uploads bucket
   location   = "apac"                    # co-locate with the ap-southeast-1 footprint
@@ -125,7 +125,7 @@ module "rally_public_assets" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
   # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag
-  source     = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "rally-prod-public-assets"
   location   = "apac"
@@ -172,7 +172,7 @@ module "ceo_suite_db_backups" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
   # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag (matches rally_attachments) — not a mutable external source
-  source     = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "qnsc-ceo-suite-db-backups"
   location   = "apac" # co-locate with the ap-southeast-1 footprint
@@ -201,7 +201,7 @@ module "ceo_suite_db_backups" {
 module "qnsc_kb_sources" {
   count = var.cloudflare_account_id != "" ? 1 : 0
 
-  source     = "git::https://github.com/quynhonsemiconductor/qnsc-tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
+  source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "qnsc-kb-prod-sources"
   location   = "apac"
