@@ -43,6 +43,30 @@ output "rally_public_assets_base_url" {
   EOT
 }
 
+# Rebrand aliases: the product stack now looks these up under the `rova_*` prefix
+# (var.product = "rova"). They point at the SAME underlying R2 buckets — the
+# physical bucket names are intentionally unchanged to avoid an object-data
+# migration. Rename the physical buckets separately if/when desired.
+output "rova_attachments_name" {
+  value       = one(module.rally_attachments[*].name)
+  description = "Alias of rally_attachments_name for the rebranded product stack."
+}
+
+output "rova_attachments_endpoint" {
+  value       = one(module.rally_attachments[*].endpoint)
+  description = "Alias of rally_attachments_endpoint for the rebranded product stack."
+}
+
+output "rova_public_assets_name" {
+  value       = one(module.rally_public_assets[*].name)
+  description = "Alias of rally_public_assets_name for the rebranded product stack."
+}
+
+output "rova_public_assets_base_url" {
+  value       = one(module.rally_public_assets[*].public_base_url)
+  description = "Alias of rally_public_assets_base_url for the rebranded product stack."
+}
+
 # Consumed by the qnsc-kb develop stack via terraform_remote_state
 # (platform/storage-dev) — injected into the api/worker tasks as
 # SOURCE_STORAGE_BUCKET + S3_ENDPOINT_URL, alongside SOURCE_STORAGE_BACKEND="r2".

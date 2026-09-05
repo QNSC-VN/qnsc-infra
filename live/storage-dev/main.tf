@@ -205,10 +205,4 @@ module "qnsc_kb_sources" {
 #
 # SAFE TO REMOVE once applied. An import block whose target is already in state is a
 # no-op, so leaving it costs nothing but noise — delete it on the next edit to this file.
-import {
-  to = module.qnsc_kb_sources[0].cloudflare_r2_bucket.this
-  # Three segments, not two: the provider wants "<account_id>/<bucket>/<jurisdiction>".
-  # "default" is the standard jurisdiction — the alternatives ("eu", "fedramp") place a
-  # bucket under a specific regulatory boundary, and this bucket has none.
-  id = "${var.cloudflare_account_id}/qnsc-kb-develop-sources/default"
-}
+# (Removed: the qnsc_kb_sources bucket adoption completed and is in state.)
