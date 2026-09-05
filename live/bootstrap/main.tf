@@ -94,8 +94,8 @@ module "iam_oidc" {
 
   github_org             = "quynhonsemiconductor"
   environments           = {}
-  app_repo_names         = ["qnsc-infra"]
-  infra_repo_name        = "qnsc-infra"
+  app_repo_names         = ["infra"]
+  infra_repo_name        = "infra"
   ecr_repository_pattern = "qnsc-*"
   ecs_passrole_pattern   = "qnsc-*"
   tags                   = { Layer = "platform" }
