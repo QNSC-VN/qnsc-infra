@@ -57,13 +57,13 @@ module "rally_attachments" {
 
   source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
-  name       = "rally-develop-attachments" # same name as the S3 bucket it replaces
-  location   = "apac"                      # co-locate with the ap-southeast-1 footprint
+  name       = "rova-develop-attachments" # same name as the S3 bucket it replaces
+  location   = "apac"                     # co-locate with the ap-southeast-1 footprint
 
   # Mirrors the rally-develop S3 CORS exactly (browser presigned PUT upload).
   cors_rules = [{
     allowed_methods = ["PUT"]
-    allowed_origins = ["https://rally-dev.qnsc.vn", "http://localhost:5173"]
+    allowed_origins = ["https://rova-dev.qnsc.vn", "http://localhost:5173"]
     # x-amz-checksum-sha256 is REQUIRED: the presigned PUT binds the SHA-256 into
     # its signature, so the browser must be allowed to send that header or every
     # upload fails at preflight.
@@ -132,12 +132,12 @@ module "rally_public_assets" {
   # checkov:skip=CKV_TF_1: first-party module pinned by immutable release tag
   source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
-  name       = "rally-develop-public-assets"
+  name       = "rova-develop-public-assets"
   location   = "apac"
 
   cors_rules = [{
     allowed_methods = ["PUT"]
-    allowed_origins = ["https://rally-dev.qnsc.vn", "http://localhost:5173"]
+    allowed_origins = ["https://rova-dev.qnsc.vn", "http://localhost:5173"]
     allowed_headers = ["Content-Type", "Content-Disposition", "x-amz-checksum-sha256"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
@@ -153,7 +153,7 @@ module "rally_public_assets" {
   # (UploadPolicy.visibility restricts it to raster-image avatar/logo surfaces), so
   # world-readable-by-key is the intended property rather than a leak.
   custom_domain = {
-    hostname = "rally-assets-dev.qnsc.vn"
+    hostname = "rova-assets-dev.qnsc.vn"
     zone_id  = data.terraform_remote_state.bootstrap.outputs.cloudflare_zone_id
   }
 
