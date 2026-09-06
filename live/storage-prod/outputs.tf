@@ -43,6 +43,29 @@ output "rally_public_assets_base_url" {
   EOT
 }
 
+# Product-name aliases for the rebranded stack (product = "rova"): the product
+# stack resolves storage outputs as `${var.product}_*`. These expose the same
+# underlying buckets under the rova_* names so the rova prod stack reads them.
+output "rova_attachments_name" {
+  value       = one(module.rally_attachments[*].name)
+  description = "Alias of rally_attachments_name for the rebranded product stack."
+}
+
+output "rova_attachments_endpoint" {
+  value       = one(module.rally_attachments[*].endpoint)
+  description = "Alias of rally_attachments_endpoint for the rebranded product stack."
+}
+
+output "rova_public_assets_name" {
+  value       = one(module.rally_public_assets[*].name)
+  description = "Alias of rally_public_assets_name for the rebranded product stack."
+}
+
+output "rova_public_assets_base_url" {
+  value       = one(module.rally_public_assets[*].public_base_url)
+  description = "Alias of rally_public_assets_base_url for the rebranded product stack."
+}
+
 # Consumed by ceo-suite CI (web-deploy `d1_backup_bucket`) — durable archive of
 # pre-migration D1 exports. null when applied plan-only (no cloudflare_account_id).
 output "ceo_suite_db_backups_name" {
