@@ -58,7 +58,7 @@ module "rally_attachments" {
   source     = "git::https://github.com/quynhonsemiconductor/tf-modules.git//modules/cf-r2?ref=cf-r2-v1.1.0"
   account_id = var.cloudflare_account_id
   name       = "rova-develop-attachments" # same name as the S3 bucket it replaces
-  location   = "apac"                      # co-locate with the ap-southeast-1 footprint
+  location   = "apac"                     # co-locate with the ap-southeast-1 footprint
 
   # Mirrors the rally-develop S3 CORS exactly (browser presigned PUT upload).
   cors_rules = [{
